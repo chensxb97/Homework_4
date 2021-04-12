@@ -15,9 +15,10 @@ from zipfile import ZipFile
 from os import listdir
 from os.path import join, isfile
 from nltk.stem.porter import PorterStemmer
+from nltk.util import ngrams
 
 # usage
-# python index.py -i dataset.zip -d dictionary.txt -p postings.txt
+# python index.py -i 'dataset.zip' -d dictionary.txt -p postings.txt
 
 def usage():
     print("usage: " +
@@ -34,80 +35,83 @@ def build_index(in_dir, out_dict, out_postings):
     # Pls implement your code in below
 
     # Initialisation
-
-    df_zf = ZipFile(in_dir) # Reading zip file
-    df = pd.read_csv(df_zf.open('dataset.csv')) # Load dataset
-
-    # Test with the first 10 records
-    n = 10
-
-    print(df.iloc[0])
-
-    return # Continue from here
-
-    # Word tokenization and stemming
     list_punc = list(string.punctuation)
     stemmer = PorterStemmer()
     index_dict = {}
     postings_dict = {}
     docLengths_dict = {}
     collection_size = 0
-    files = [f for f in listdir(in_dir) if isfile(
-        join(in_dir, f))]  # all files from directory
-    sorted_files = sorted(files, key=lambda f: int(
-        os.path.splitext(f)[0]))  # sorted files in ascending order
 
+    # Load dataset
+    df_zf = ZipFile(in_dir) # Reading from a zipped file
+    df = pd.read_csv(df_zf.open('dataset.csv'))
+    zones = (df.columns).drop('document_id') # consider text from all zones except doc_id
+
+    # Sort the dataframe by doc_id in ascending order
+    df["document_id"] = pd.to_numeric(df['document_id']) 
+    df = df.sort_values(by=['document_id']) 
+
+    # Test with the first 10 documents
     # Word processing and tokenisation for each document
-    for file in sorted_files:
-        file_path = join(in_dir, file)
-        f = open(file_path, "r")
-
-        # Store all observed words in a list, used to track termFrequency
-        termList = []
-        # Set data structure is used to store the unique words only
-        termSet = set()
+    # For each record, we iterate through the zones and populate index_dict
+    n = 10
+    for i in range(n):
+        record = df.iloc[i]
+        docId = record['document_id']
         docLength = 0
+        for zone in zones:
+            # Store all observed terms in a list, used to track termFrequency
+            termList = []
+            # Set data structure is used to store the unique words only
+            termSet = set()
 
-        for line in f:
-            new_line = ''
-            for c in line:
+            clean_text = ''
+            raw_text = record[zone]
+            for c in raw_text:
                 if c not in list_punc:
-                    new_line += c
-            new_line = new_line.lower()
-            for sentence in nltk.sent_tokenize(new_line):
-                for word in nltk.word_tokenize(sentence):
-                    word = stemmer.stem(word)
-                    termList.append(word)
-                    termSet.add(word)
+                    clean_text += c
+            clean_text = clean_text.lower()
+            for sentence in nltk.sent_tokenize(clean_text):
+                stemmed_words = [stemmer.stem(word) for word in nltk.word_tokenize(sentence)] # stemming
+                sentence = ' '.join(stemmed_words)
+                for i in range(1,4): # Generate ngrams
+                    gramList = [] 
+                    gramList = get_ngrams(sentence,stemmer,i)
+                    for gram in gramList:
+                        termList.append(gram)
+                        termSet.add(gram)
 
-        # Populate postings_dict
-        # postings_dict = {token: {docId: termFrequency}}
-        for t in termList:
-            if t in postings_dict.keys():
-                if int(file) in postings_dict[t].keys():
-                    termFreq = postings_dict[t][int(file)]
-                    termFreq += 1
-                    postings_dict[t][int(file)] = termFreq
+            # Populate postings_dict
+            # postings_dict = {token_zone: {docId: termFrequency}}
+            for t in termList:
+                t_zone = t + '_{}'.format(zone) # Terms have to be compared within the same zone
+                if t_zone in postings_dict.keys():
+                    if docId in postings_dict[t_zone].keys():
+                        termFreq = postings_dict[t_zone][docId]
+                        termFreq += 1
+                        postings_dict[t_zone][docId] = termFreq
+                    else:
+                        postings_dict[t_zone][docId] = 1
                 else:
-                    postings_dict[t][int(file)] = 1
-            else:
-                postings_dict[t] = {}
-                postings_dict[t][int(file)] = 1
+                    postings_dict[t_zone] = {}
+                    postings_dict[t_zone][docId] = 1
+            
+            # Populate index_dict and docLengths_dict
+            # index_dict = {token: docFrequency}
+            # docLengths_dict = {docId: docLength}
+            for t in termSet:
+                t_zone = t + '_{}'.format(zone)
+                if t_zone in index_dict.keys():
+                    docFreq = index_dict[t_zone]
+                    docFreq += 1
+                    index_dict[t_zone] = docFreq
+                else:
+                    index_dict[t_zone] = 1
+                # docLength of a document is computed for tf (document) cosine normalization
+                docLength += math.pow(1+math.log10(postings_dict[t_zone][docId]), 2)
 
-        # Populate index_dict and docLengths_dict
-        # index_dict = {token: docFrequency}
-        # docLengths_dict = {docId: docLength}
-        for t in termSet:
-            if t in index_dict.keys():
-                docFreq = index_dict[t]
-                docFreq += 1
-                index_dict[t] = docFreq
-            else:
-                index_dict[t] = 1
-            # docLength of a document is computed for tf (document) cosine normalization
-            docLength += math.pow(1+math.log10(postings_dict[t][int(file)]), 2)
         docLength = math.sqrt(docLength)
-        docLengths_dict[int(file)] = docLength
+        docLengths_dict[docId] = docLength
 
         # Increment collection size
         collection_size += 1
@@ -146,6 +150,9 @@ def build_index(in_dir, out_dict, out_postings):
                  collection_size], open(out_dict, "wb"))
     print('done!')
 
+def get_ngrams(text, stemmer,n):
+    n_grams = ngrams(nltk.word_tokenize(text), n)
+    return [ '&'.join(grams) for grams in n_grams]
 
 def create_postings(term_dictionary):
     '''
