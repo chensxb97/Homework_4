@@ -17,7 +17,7 @@ from os.path import join, isfile
 from nltk.stem.porter import PorterStemmer
 
 # usage
-# python index.py -i 'dataset.zip' -d dictionary.txt -p postings.txt
+# python index.py -i dataset.zip -d dictionary.txt -p postings.txt
 
 def usage():
     print("usage: " +
