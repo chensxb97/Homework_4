@@ -43,8 +43,13 @@ def run_search(dict_file, postings_file, queries_file, results_file):
     # Open posting lists, but not loaded into memory
     postings = open(postings_file, 'r')
 
-    # Open queries file
-    queries = open(queries_file, 'r')
+    # Open queries file (Reading a zipped file)
+    q_zf = ZipFile(queries_file)
+    queries = []
+    for i in range(1,len(q_zf.namelist())+1):
+        q_file = io.TextIOWrapper(q_zf.open("q{}.txt".format(i)), encoding="utf-8")
+        query = q_file.readline()
+        queries.append(query)
 
     # Process each query and store the results in a list
     # query_results = [[result for query1],[result for query 2]...]
