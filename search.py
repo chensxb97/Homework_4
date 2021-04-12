@@ -10,7 +10,7 @@ import time
 from nltk.stem.porter import PorterStemmer
 from heapq import nlargest
 
-# python3 search.py -d dictionary.txt -p postings.txt  -q queries.txt -o results.txt
+# python3 search.py -d dictionary.txt -p postings.txt  -q queries.zip -o results.txt
 
 
 def usage():
