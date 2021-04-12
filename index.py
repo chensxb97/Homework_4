@@ -101,7 +101,7 @@ def build_index(in_dir, out_dict, out_postings):
                     postings_dict[t_zone][docId] = 1
 
             # Populate index_dict and docLengths_dict
-            # index_dict = {token: docFrequency}
+            # index_dict = {token_zone: docFrequency}
             # docLengths_dict = {docId: docLength}
             for t in termSet:
                 t_zone = t + '_{}'.format(zone)
