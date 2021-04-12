@@ -9,6 +9,9 @@ import os
 import pickle
 import math
 import linecache
+import io
+import pandas as pd
+from zipfile import ZipFile
 from os import listdir
 from os.path import join, isfile
 from nltk.stem.porter import PorterStemmer
@@ -28,6 +31,18 @@ def build_index(in_dir, out_dict, out_postings):
     # Pls implement your code in below
 
     # Initialisation
+
+    df_zf = ZipFile(in_dir) # Reading zip file
+    df = pd.read_csv(df_zf.open('dataset.csv')) # Load dataset
+
+    # Test with the first 10 records
+    n = 10
+
+    print(df.iloc[0])
+
+    return # Continue from here
+
+    # Word tokenization and stemming
     list_punc = list(string.punctuation)
     stemmer = PorterStemmer()
     index_dict = {}
