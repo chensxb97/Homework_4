@@ -7,11 +7,13 @@ import math
 import pickle
 import os
 import time
+import io
+from zipfile import ZipFile
 from nltk.stem.porter import PorterStemmer
 from heapq import nlargest
 
+# usage
 # python3 search.py -d dictionary.txt -p postings.txt  -q queries.zip -o results.txt
-
 
 def usage():
     print("usage: " +
@@ -43,31 +45,28 @@ def run_search(dict_file, postings_file, queries_file, results_file):
     # Open posting lists, but not loaded into memory
     postings = open(postings_file, 'r')
 
-    # Open queries file (Reading a zipped file)
+    # Open queries zipped file
     q_zf = ZipFile(queries_file)
     queries = []
     for i in range(1,len(q_zf.namelist())+1):
         q_file = io.TextIOWrapper(q_zf.open("q{}.txt".format(i)), encoding="utf-8")
-        query = q_file.readline()
+        query = (q_file.readline()).strip()
         queries.append(query)
 
     # Process each query and store the results in a list
     # query_results = [[result for query1],[result for query 2]...]
     query_results = []
     for query in queries:
-        for sentence in nltk.sent_tokenize(query):
-            # Store all normalized query tf-idf weights in query_dict
-            query_dict = process_query(
-                sentence, sorted_index_dict, collection_size, stemmer)
-
-            # Store all normalized document tf weights in document_dict
-            document_dict = process_documents(
-                query_dict, sorted_index_dict, docLengths_dict, postings)
-
-            # Generates the top 10 documents for the query
-            scores = process_scores(query_dict, document_dict)
-
-            query_results.append(scores)
+        # Store all normalized query tf-idf weights in query_dict
+        query_dict = process_query(query, sorted_index_dict, collection_size, stemmer)
+        
+        # Store all normalized document tf weights in document_dict
+        document_dict = process_documents(query_dict, sorted_index_dict, docLengths_dict, postings)
+        
+        # Generates the top 10 documents for the query
+        scores = process_scores(query_dict, document_dict)
+        
+        query_results.append(scores)
 
     # Write query results into output results_file
     with open(results_file, 'w') as results_file:
@@ -88,54 +87,71 @@ def run_search(dict_file, postings_file, queries_file, results_file):
 
 def process_query(input_query, sorted_index_dict, collection_size, stemmer):
     '''
-    Processes and extracts terms from the input query.
-    Returns a dictionary containing the normalized tf-idf weights for each term.
+    Processes and extracts terms/phrases from the input query.
+    Returns a dictionary containing the normalized tf-idf weights for each term/phrase.
     query_dict = {term: normalized tf-idf-wt}
 
     '''
     query_dict = {}
 
+    zones = ['title','content', 'date_posted','court']
+
     # Word processing and tokenisation for query terms
-    for word in input_query.split():
-        word = word.lower()
-        word = stemmer.stem(word)
-        if word in query_dict.keys():
-            query_dict[word] += 1
+    if 'AND' in input_query:
+        tokens = input_query.split('AND') # Separate the phrases/terms
+    else:
+        tokens = input_query.split(' ')
+    for t in tokens: 
+        if '"' in t:
+            t = t.replace('"','') # Remove inverted commas
+        t = t.strip() # Remove trailing whitespaces
+        t = t.lower() # lower case-folding
+        if ' ' in t: # Checks if t is a phrase
+            split = t.split(' ')
+            stemmed = [stemmer.stem(word) for word in split] # stem individual terms
+            t = '&'.join(split) # Stemmed phrase with & as the delimiter
         else:
-            query_dict[word] = 1
+            t = stemmer.stem(t) # Stem lone term
+        for z in zones:
+            t_z = t + '_{}'.format(z) # Transform 'term' to 'term_zone'
+            if t_z in query_dict.keys(): # Populate query_dict
+                query_dict[t_z] += 1
+            else:
+                query_dict[t_z] = 1
+            print(t_z)
 
     # Denominator for normalization of tf-idf (query)
     normalize_query = 0
 
     # Calcualte tf-idf-wt for query terms
-    for word in query_dict.keys():
+    for t_z in query_dict.keys():
         # Calculate tf-wt
-        q_tf = query_dict[word]
+        q_tf = query_dict[t_z]
         q_tf_wt = 1 + math.log10(q_tf)
 
         # Calculate idf
-        if word in sorted_index_dict.keys():
-            q_df = sorted_index_dict[word][1]
+        if t_z in sorted_index_dict.keys():
+            q_df = sorted_index_dict[t_z][1]
             q_idf = math.log10(collection_size/q_df)
         else:
             q_idf = 0
 
         q_wt = q_tf_wt * q_idf
 
-        # Store wt for each word in query back into dictionary
-        query_dict[word] = q_wt
+        # Store wt for each term_zone in query back into dictionary
+        query_dict[t_z] = q_wt
         normalize_query += math.pow(q_wt, 2)
 
     # Returns None if no query terms exist in the main index dictionary
     if normalize_query == 0:
         return None
-
+    '''
     # Perform cosine normalization
-    for word in query_dict.keys():
-        q_wt = query_dict[word]
+    for t_z in query_dict.keys():
+        q_wt = query_dict[t_z]
         normalize_wt = q_wt/math.sqrt(normalize_query)
-        query_dict[word] = normalize_wt
-
+        query_dict[t_z] = normalize_wt
+    '''
     return query_dict
 
 
