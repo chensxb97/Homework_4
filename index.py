@@ -65,14 +65,15 @@ def build_index(in_dir, out_dict, out_postings):
             # Set data structure is used to store the unique words only
             termSet = set()
 
-            clean_text = ''
+            
             raw_text = record[zone]
-            for c in raw_text:
-                if c not in list_punc:
-                    clean_text += c
-            clean_text = clean_text.lower()
-            for sentence in nltk.sent_tokenize(clean_text):
-                stemmed_words = [stemmer.stem(word) for word in nltk.word_tokenize(sentence)] # stem words in the sentence
+            raw_text = raw_text.lower()
+            for sentence in nltk.sent_tokenize(raw_text):
+                clean_text = ''
+                for c in sentence:
+                    if c not in list_punc:
+                        clean_text += c
+                stemmed_words = [stemmer.stem(word) for word in nltk.word_tokenize(clean_text)] # stem words in the sentence
                 sentence = ' '.join(stemmed_words)
                 for i in range(1,4): # Generate unigrams, bigrams and trigrams
                     gramList = [] 
