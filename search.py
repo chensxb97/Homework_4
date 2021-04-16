@@ -13,10 +13,7 @@ from nltk.stem.porter import PorterStemmer
 from heapq import nlargest
 
 
-# Flag to deactivate / actiate rocchio
-use_rocchio = True
-rocchio_alpha = 0.8
-rocchio_beta = 0.2
+
 
 
 
@@ -36,6 +33,14 @@ def run_search(dict_file, postings_file, queries_file, results_file):
     print('running search on the queries...')
     # This is an empty method
     # Pls implement your code in below
+
+    # Rocchio Configuration Settings
+    rocchio_config = {
+        "use_rocchio": True,
+        "rocchio_alpha": 0.8,
+        "rocchio_beta": 0.2
+    }
+
 
     # Initialise stemmer
     stemmer = PorterStemmer()
@@ -71,8 +76,6 @@ def run_search(dict_file, postings_file, queries_file, results_file):
     # queries_groundtruth_docs_list = [['246403','246407'],['246403', '246407'],['246403', '246407']] 
     queries_groundtruth_docs_list = [['246403', '246427'],['246403', '246427'],['246403', '246427']]
     
-    # print("queries", queries)
-    # print("queries_groundtruth_docs_list", queries_groundtruth_docs_list)
 
 
     # Process each query and store the results in a list
@@ -89,7 +92,7 @@ def run_search(dict_file, postings_file, queries_file, results_file):
         print("document_dict", document_dict.keys())
         
         # Generates the top 10 documents for the query
-        scores = process_scores(query_dict, document_dict, query_groundtruth_docs)
+        scores = process_scores(query_dict, document_dict, query_groundtruth_docs, rocchio_config)
         
         query_results.append(scores)
 
@@ -230,7 +233,7 @@ def process_documents(query_dictionary, sorted_index_dict, docLengths_dict, inpu
     return document_dict
 
 
-def process_scores(query_dictionary, document_dictionary, query_groundtruth_docs):
+def process_scores(query_dictionary, document_dictionary, query_groundtruth_docs, rocchio_config):
     '''
     Computes the cosine-normalized query-document score for all terms for each document.
     Returns a list of the top 10 most relevant documents based on the query-document score. 
@@ -238,15 +241,13 @@ def process_scores(query_dictionary, document_dictionary, query_groundtruth_docs
     '''
 
     # Set use_rocchio to False if not using query refinement
-    if use_rocchio:
+    if rocchio_config['use_rocchio']:
         centroid_dict = {}
         num_groundtruth_doc = len(query_groundtruth_docs)
 
-        # print("query_groundtruth_docs", query_groundtruth_docs)
         for doc_id in query_groundtruth_docs:
             centroid_dict = {}
 
-            # print("document_dictionary[doc_id]", document_dictionary.keys())
             doc_dict = document_dictionary[doc_id]
 
             for key, value in doc_dict.items():
@@ -257,9 +258,6 @@ def process_scores(query_dictionary, document_dictionary, query_groundtruth_docs
         
         for term, value in centroid_dict.items():
             centroid_dict[term] /= num_groundtruth_doc
-        # print("\ncentroid_dict1", document_dictionary.keys())
-
-        # print("\ncentroid_dict2", centroid_dict.keys())                
 
 
 
@@ -270,12 +268,11 @@ def process_scores(query_dictionary, document_dictionary, query_groundtruth_docs
 
     result = []
 
-    # print("document_dictionary.keys():", document_dictionary.keys())
     for docID in document_dictionary.keys():
         docScore = 0
         for term in query_dictionary.keys():
-            if use_rocchio:
-                doc_wt = document_dictionary[docID][term] * rocchio_alpha + centroid_dict[term] * rocchio_beta
+            if rocchio_config['use_rocchio']:
+                doc_wt = document_dictionary[docID][term] * rocchio_config['rocchio_alpha'] + centroid_dict[term] * rocchio_config['rocchio_beta']
             else:
                 doc_wt = document_dictionary[docID][term]
             term_wt = query_dictionary[term]
