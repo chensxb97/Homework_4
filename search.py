@@ -12,6 +12,14 @@ from zipfile import ZipFile
 from nltk.stem.porter import PorterStemmer
 from heapq import nlargest
 
+
+# Flag to deactivate / actiate rocchio
+use_rocchio = True
+rocchio_alpha = 0.8
+rocchio_beta = 0.2
+
+
+
 # usage
 # python3 search.py -d dictionary.txt -p postings.txt  -q queries.zip -o results.txt
 
@@ -48,23 +56,40 @@ def run_search(dict_file, postings_file, queries_file, results_file):
     # Open queries zipped file
     q_zf = ZipFile(queries_file)
     queries = []
-    for i in range(1,len(q_zf.namelist())+1):
-        q_file = io.TextIOWrapper(q_zf.open("q{}.txt".format(i)), encoding="utf-8")
-        query = (q_file.readline()).strip()
-        queries.append(query)
+    queries_groundtruth_docs_list = []
+    
+    # for i in range(1,len(q_zf.namelist())+1):
+    #     q_file = io.TextIOWrapper(q_zf.open("q{}.txt".format(i)), encoding="utf-8")
+    #     query = (q_file.readline()).strip()
+    #     queries.append(query)
+
+    #     query_groundtruth_docs = q_file.readlines()
+    #     query_groundtruth_docs = [x.strip() for x in query_groundtruth_docs]
+    #     queries_groundtruth_docs_list.append(query_groundtruth_docs)
+    
+    queries = ['quiet phone call', 'good grades exchange scandal', '"fertility treatment" AND damages']
+    # queries_groundtruth_docs_list = [['246403','246407'],['246403', '246407'],['246403', '246407']] 
+    queries_groundtruth_docs_list = [['246403', '246427'],['246403', '246427'],['246403', '246427']]
+    
+    # print("queries", queries)
+    # print("queries_groundtruth_docs_list", queries_groundtruth_docs_list)
+
 
     # Process each query and store the results in a list
     # query_results = [[result for query1],[result for query 2]...]
     query_results = []
-    for query in queries:
+    for query_index, query in enumerate(queries):
+        query_groundtruth_docs = queries_groundtruth_docs_list[query_index]
         # Store all normalized query tf-idf weights in query_dict
         query_dict = process_query(query, sorted_index_dict, collection_size, stemmer)
         
         # Store all normalized document tf weights in document_dict
-        document_dict = process_documents(query_dict, sorted_index_dict, docLengths_dict, postings)
+        document_dict = process_documents(query_dict, sorted_index_dict, docLengths_dict, postings, query_groundtruth_docs)
+
+        print("document_dict", document_dict.keys())
         
         # Generates the top 10 documents for the query
-        scores = process_scores(query_dict, document_dict)
+        scores = process_scores(query_dict, document_dict, query_groundtruth_docs)
         
         query_results.append(scores)
 
@@ -118,7 +143,7 @@ def process_query(input_query, sorted_index_dict, collection_size, stemmer):
                 query_dict[t_z] += 1
             else:
                 query_dict[t_z] = 1
-            print(t_z)
+            # print(t_z)
 
     # Denominator for normalization of tf-idf (query)
     normalize_query = 0
@@ -155,7 +180,7 @@ def process_query(input_query, sorted_index_dict, collection_size, stemmer):
     return query_dict
 
 
-def process_documents(query_dictionary, sorted_index_dict, docLengths_dict, input_postings):
+def process_documents(query_dictionary, sorted_index_dict, docLengths_dict, input_postings, query_groundtruth_docs):
     '''
     Checks for each term recorded in the input query dictionary with the main index dictionary.
     Returns a document dictionary containing the normalized tf weights for each term found in the main index dictionary.
@@ -205,22 +230,54 @@ def process_documents(query_dictionary, sorted_index_dict, docLengths_dict, inpu
     return document_dict
 
 
-def process_scores(query_dictionary, document_dictionary):
+def process_scores(query_dictionary, document_dictionary, query_groundtruth_docs):
     '''
     Computes the cosine-normalized query-document score for all terms for each document.
     Returns a list of the top 10 most relevant documents based on the query-document score. 
 
     '''
+
+    # Set use_rocchio to False if not using query refinement
+    if use_rocchio:
+        centroid_dict = {}
+        num_groundtruth_doc = len(query_groundtruth_docs)
+
+        # print("query_groundtruth_docs", query_groundtruth_docs)
+        for doc_id in query_groundtruth_docs:
+            centroid_dict = {}
+
+            # print("document_dictionary[doc_id]", document_dictionary.keys())
+            doc_dict = document_dictionary[doc_id]
+
+            for key, value in doc_dict.items():
+                if key in centroid_dict:
+                    centroid_dict[key] += value
+                else:
+                    centroid_dict[key] = value
+        
+        for term, value in centroid_dict.items():
+            centroid_dict[term] /= num_groundtruth_doc
+        # print("\ncentroid_dict1", document_dictionary.keys())
+
+        # print("\ncentroid_dict2", centroid_dict.keys())                
+
+
+
+
     # Returns an empty result if query dictionary is empty
     if query_dictionary == None:
         return None
 
     result = []
 
+    # print("document_dictionary.keys():", document_dictionary.keys())
     for docID in document_dictionary.keys():
         docScore = 0
         for term in query_dictionary.keys():
-            doc_wt = document_dictionary[docID][term]
+            if use_rocchio:
+                doc_wt = document_dictionary[docID][term] * rocchio_alpha + centroid_dict[term] * rocchio_beta
+            else:
+                doc_wt = document_dictionary[docID][term]
             term_wt = query_dictionary[term]
             docScore += doc_wt*term_wt
         result.append((docID, docScore))
