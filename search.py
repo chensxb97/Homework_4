@@ -12,11 +12,6 @@ from zipfile import ZipFile
 from nltk.stem.porter import PorterStemmer
 from heapq import nlargest
 
-
-
-
-
-
 # usage
 # python3 search.py -d dictionary.txt -p postings.txt  -q queries.zip -o results.txt
 
@@ -41,7 +36,6 @@ def run_search(dict_file, postings_file, queries_file, results_file):
         "rocchio_beta": 0.2
     }
 
-
     # Initialise stemmer
     stemmer = PorterStemmer()
 
@@ -53,7 +47,8 @@ def run_search(dict_file, postings_file, queries_file, results_file):
     sorted_dict = pickle.load(in_dict)
     sorted_index_dict = sorted_dict[0]
     docLengths_dict = sorted_dict[1]
-    collection_size = sorted_dict[2]
+    relevantDocs_dict = sorted_dict[2]
+    collection_size = sorted_dict[3]
 
     # Open posting lists, but not loaded into memory
     postings = open(postings_file, 'r')
@@ -74,7 +69,7 @@ def run_search(dict_file, postings_file, queries_file, results_file):
     
     queries = ['quiet phone call', 'good grades exchange scandal', '"fertility treatment" AND damages']
     # queries_groundtruth_docs_list = [['246403','246407'],['246403', '246407'],['246403', '246407']] 
-    queries_groundtruth_docs_list = [['246403', '246427'],['246403', '246427'],['246403', '246427']]
+    queries_groundtruth_docs_list = [[246403, 246427],[246403, 246427],[246403, 246427]]
     
 
 
@@ -87,12 +82,12 @@ def run_search(dict_file, postings_file, queries_file, results_file):
         query_dict = process_query(query, sorted_index_dict, collection_size, stemmer)
         
         # Store all normalized document tf weights in document_dict
-        document_dict = process_documents(query_dict, sorted_index_dict, docLengths_dict, postings, query_groundtruth_docs)
+        document_dict = process_documents(query_dict, sorted_index_dict, docLengths_dict, postings)
 
         print("document_dict", document_dict.keys())
         
         # Generates the top 10 documents for the query
-        scores = process_scores(query_dict, document_dict, query_groundtruth_docs, rocchio_config)
+        scores = process_scores(query_dict, document_dict, relevantDocs_dict, query_groundtruth_docs, rocchio_config)
         
         query_results.append(scores)
 
@@ -183,7 +178,7 @@ def process_query(input_query, sorted_index_dict, collection_size, stemmer):
     return query_dict
 
 
-def process_documents(query_dictionary, sorted_index_dict, docLengths_dict, input_postings, query_groundtruth_docs):
+def process_documents(query_dictionary, sorted_index_dict, docLengths_dict, input_postings):
     '''
     Checks for each term recorded in the input query dictionary with the main index dictionary.
     Returns a document dictionary containing the normalized tf weights for each term found in the main index dictionary.
@@ -230,15 +225,18 @@ def process_documents(query_dictionary, sorted_index_dict, docLengths_dict, inpu
                 document_dict[document][word] = d_normalize_wt
             else:
                 document_dict[document][word] = 0
+
     return document_dict
 
 
-def process_scores(query_dictionary, document_dictionary, query_groundtruth_docs, rocchio_config):
+def process_scores(query_dictionary, document_dictionary, relevantDocs_dict, query_groundtruth_docs, rocchio_config):
     '''
     Computes the cosine-normalized query-document score for all terms for each document.
     Returns a list of the top 10 most relevant documents based on the query-document score. 
 
     '''
+    # Original query: A B C
+    # Document Vector:  D E F G ... (without A, B and C)
 
     # Set use_rocchio to False if not using query refinement
     if rocchio_config['use_rocchio']:
@@ -248,19 +246,18 @@ def process_scores(query_dictionary, document_dictionary, query_groundtruth_docs
         for doc_id in query_groundtruth_docs:
             centroid_dict = {}
 
-            doc_dict = document_dictionary[doc_id]
+            doc_vector = relevantDocs_dict[doc_id]
 
-            for key, value in doc_dict.items():
-                if key in centroid_dict:
-                    centroid_dict[key] += value
-                else:
-                    centroid_dict[key] = value
+            for (key, value) in doc_vector: # For term weights in relevant document vector
+                if key not in centroid_dict:
+                    centroid_dict[key] = value # Appending term keys in centroid_dict 
+
+            for word in query_dictionary.keys(): # To include original query term weights if not included previously
+                if word not in centroid_dict:
+                    centroid_dict[key] = query_dictionary[word]
         
-        for term, value in centroid_dict.items():
+        for term, value in centroid_dict.items(): # To normalize the centroid vector
             centroid_dict[term] /= num_groundtruth_doc
-
-
-
 
     # Returns an empty result if query dictionary is empty
     if query_dictionary == None:
