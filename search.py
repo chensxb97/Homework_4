@@ -269,7 +269,10 @@ def process_scores(query_dictionary, document_dictionary, relevantDocs_dict, que
         docScore = 0
         for term in query_dictionary.keys():
             if rocchio_config['use_rocchio']:
-                doc_wt = document_dictionary[docID][term] * rocchio_config['rocchio_alpha'] + centroid_dict[term] * rocchio_config['rocchio_beta']
+                if term in centroid_dict:
+                    doc_wt = document_dictionary[docID][term] * rocchio_config['rocchio_alpha'] + centroid_dict[term] * rocchio_config['rocchio_beta']
+                else:
+                    doc_wt = document_dictionary[docID][term] * 1 # *1 here for reference compared to *alpha
             else:
                 doc_wt = document_dictionary[docID][term]
             term_wt = query_dictionary[term]
