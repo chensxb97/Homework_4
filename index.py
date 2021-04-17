@@ -39,6 +39,7 @@ def build_index(in_dir, out_dict, out_postings):
     stemmer = PorterStemmer()
     index_dict = {}
     postings_dict = {}
+    relevantDocs_dict = {}
     docLengths_dict = {}
     collection_size = 0
 
@@ -64,7 +65,6 @@ def build_index(in_dir, out_dict, out_postings):
             termList = []
             # Set data structure is used to store the unique words only
             termSet = set()
-
             
             raw_text = record[zone]
             raw_text = raw_text.lower()
@@ -145,8 +145,38 @@ def build_index(in_dir, out_dict, out_postings):
     postings_out.close()
     # Final dictionary is now {term : [termID,docFrequency,charOffSet,strLength]}
 
+
+    # Obtain relevant document vector containing top-10 tf-idf weights for pseudo-relevance feedback
+    for docId,docLength in docLengths_dict.items():
+        relevantDoc = {}
+        normalize_doc = docLengths_dict[docId]
+        for term in postings_dict.keys():
+            if docId in postings_dict[term]:
+                # Calculate tf-wt
+                termFrequency = postings_dict[term][docId]
+                d_tf_wt = 1 + math.log10(termFrequency)
+
+                # Calculate idf
+                docFrequency = sorted_index_dict[term][1]
+                d_idf = math.log10(collection_size/docFrequency)
+
+                # tf-idf
+                d_wt = d_tf_wt * d_idf
+
+                # Perform cosine normalization
+                d_normalize_wt = d_wt/normalize_doc
+
+                relevantDoc[term] = d_normalize_wt
+
+        # Sort and obtain top-20 tf-idf weights in descending order
+        # sorted_relevantDoc = {term1: tf-idf1, term2: tf-idf2 ...}
+        sorted_relevantDoc = sorted(relevantDoc.items(), key=lambda x: x[1], reverse = True)[:20]
+
+        # Store relevant document vector
+        relevantDocs_dict[docId] = sorted_relevantDoc
+
     # Save index, length dictionaries and collection size using pickle
-    pickle.dump([sorted_index_dict, docLengths_dict,
+    pickle.dump([sorted_index_dict, docLengths_dict, relevantDocs_dict,
                  collection_size], open(out_dict, "wb"))
     print('done!')
 
