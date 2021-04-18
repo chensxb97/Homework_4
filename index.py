@@ -20,6 +20,7 @@ from nltk.util import ngrams
 # usage
 # python index.py -i 'dataset.zip' -d dictionary.txt -p postings.txt
 
+
 def usage():
     print("usage: " +
           sys.argv[0] + " -i directory-of-documents -d dictionary-file -p postings-file")
@@ -44,13 +45,14 @@ def build_index(in_dir, out_dict, out_postings):
     collection_size = 0
 
     # Load dataset
-    df_zf = ZipFile(in_dir) # Reading from a zipped file
+    df_zf = ZipFile(in_dir)  # Reading from a zipped file
     df = pd.read_csv(df_zf.open('dataset.csv'))
-    zones = (df.columns).drop('document_id') # consider text from all zones except doc_id
+    # consider text from all zones except doc_id
+    zones = (df.columns).drop('document_id')
 
     # Sort the dataframe by doc_id in ascending order
-    df["document_id"] = pd.to_numeric(df['document_id']) 
-    df = df.sort_values(by=['document_id']) 
+    df["document_id"] = pd.to_numeric(df['document_id'])
+    df = df.sort_values(by=['document_id'])
 
     # Test with the first 10 documents
     # Word processing and tokenisation for each document
@@ -65,7 +67,7 @@ def build_index(in_dir, out_dict, out_postings):
             termList = []
             # Set data structure is used to store the unique words only
             termSet = set()
-            
+
             raw_text = record[zone]
             raw_text = raw_text.lower()
             for sentence in nltk.sent_tokenize(raw_text):
@@ -73,11 +75,12 @@ def build_index(in_dir, out_dict, out_postings):
                 for c in sentence:
                     if c not in list_punc:
                         clean_text += c
-                stemmed_words = [stemmer.stem(word) for word in nltk.word_tokenize(clean_text)] # stem words in the sentence
+                stemmed_words = [stemmer.stem(word) for word in nltk.word_tokenize(
+                    clean_text)]  # stem words in the sentence
                 sentence = ' '.join(stemmed_words)
-                for i in range(1,4): # Generate unigrams, bigrams and trigrams
-                    gramList = [] 
-                    gramList = get_ngrams(sentence,i)
+                for i in range(1, 4):  # Generate unigrams, bigrams and trigrams
+                    gramList = []
+                    gramList = get_ngrams(sentence, i)
                     for gram in gramList:
                         termList.append(gram)
                         termSet.add(gram)
@@ -85,7 +88,8 @@ def build_index(in_dir, out_dict, out_postings):
             # Populate postings_dict
             # postings_dict = {token_zone: {docId: termFrequency}}
             for t in termList:
-                t_zone = t + '_{}'.format(zone) # Terms have to be categorised by their zones
+                # Terms have to be categorised by their zones
+                t_zone = t + '_{}'.format(zone)
                 if t_zone in postings_dict.keys():
                     if docId in postings_dict[t_zone].keys():
                         termFreq = postings_dict[t_zone][docId]
@@ -96,7 +100,7 @@ def build_index(in_dir, out_dict, out_postings):
                 else:
                     postings_dict[t_zone] = {}
                     postings_dict[t_zone][docId] = 1
-            
+
             # Populate index_dict and docLengths_dict
             # index_dict = {token_zone: docFrequency}
             # docLengths_dict = {docId: docLength}
@@ -109,7 +113,8 @@ def build_index(in_dir, out_dict, out_postings):
                 else:
                     index_dict[t_zone] = 1
                 # docLength of a document is computed for tf (document) cosine normalization
-                docLength += math.pow(1+math.log10(postings_dict[t_zone][docId]), 2)
+                docLength += math.pow(1 +
+                                      math.log10(postings_dict[t_zone][docId]), 2)
 
         docLength = math.sqrt(docLength)
         docLengths_dict[docId] = docLength
@@ -140,15 +145,17 @@ def build_index(in_dir, out_dict, out_postings):
         postingStr, strLength = create_postings(term_dict)
         postings_out.write(postingStr)
         termId, docFrequency = sorted_index_dict[term]
-        sorted_index_dict[term] = (termId, docFrequency, char_offset, strLength)
+        sorted_index_dict[term] = (
+            termId, docFrequency, char_offset, strLength)
         char_offset += strLength
     postings_out.close()
     # Final dictionary is now {term : [termID,docFrequency,charOffSet,strLength]}
 
-
-    # Obtain relevant document vector containing top-10 tf-idf weights for pseudo-relevance feedback
-    for docId,docLength in docLengths_dict.items():
+    # Obtain relevant document vector containing top-20 tf-idf weights for pseudo-relevance feedback
+    for docId, docLength in docLengths_dict.items():
         relevantDoc = {}
+        print(
+            docLengths_dict[docId], 'docLength: ', docLength)
         normalize_doc = docLengths_dict[docId]
         for term in postings_dict.keys():
             if docId in postings_dict[term]:
@@ -170,7 +177,8 @@ def build_index(in_dir, out_dict, out_postings):
 
         # Sort and obtain top-20 tf-idf weights in descending order
         # sorted_relevantDoc = {term1: tf-idf1, term2: tf-idf2 ...}
-        sorted_relevantDoc = sorted(relevantDoc.items(), key=lambda x: x[1], reverse = True)[:20]
+        sorted_relevantDoc = sorted(
+            relevantDoc.items(), key=lambda x: x[1], reverse=True)[:20]
 
         # Store relevant document vector
         relevantDocs_dict[docId] = sorted_relevantDoc
@@ -180,12 +188,14 @@ def build_index(in_dir, out_dict, out_postings):
                  collection_size], open(out_dict, "wb"))
     print('done!')
 
-def get_ngrams(text,n):
+
+def get_ngrams(text, n):
     '''
     Returns a list of n-grams from an input string
     '''
     n_grams = ngrams(nltk.word_tokenize(text), n)
-    return [ '&'.join(grams) for grams in n_grams]
+    return ['&'.join(grams) for grams in n_grams]
+
 
 def create_postings(term_dictionary):
     '''
