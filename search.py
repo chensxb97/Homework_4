@@ -15,7 +15,6 @@ from heapq import nlargest
 # usage
 # python3 search.py -d dictionary.txt -p postings.txt  -q queries.zip -o results.txt
 
-
 def usage():
     print("usage: " +
           sys.argv[0] + " -d dictionary-file -p postings-file -q file-of-queries -o output-file-of-results")
@@ -33,7 +32,7 @@ def run_search(dict_file, postings_file, queries_file, results_file):
     # Rocchio Configuration Settings
     rocchio_config = {
         "use_rocchio": True,
-        "rocchio_alpha": 0.8,
+        "rocchio_alpha": 1,
         "rocchio_beta": 0.2
     }
 
@@ -59,19 +58,18 @@ def run_search(dict_file, postings_file, queries_file, results_file):
     queries = []
     queries_groundtruth_docs_list = []
 
-    # for i in range(1,len(q_zf.namelist())+1):
-    #     q_file = io.TextIOWrapper(q_zf.open("q{}.txt".format(i)), encoding="utf-8")
-    #     query = (q_file.readline()).strip()
-    #     queries.append(query)
+    #for i in range(1,len(q_zf.namelist())+1):
+    #    q_file = io.TextIOWrapper(q_zf.open("q{}.txt".format(i)), encoding="utf-8")
+    #    query = (q_file.readline()).strip()
+    #    queries.append(query)
 
-    #     query_groundtruth_docs = q_file.readlines()
-    #     query_groundtruth_docs = [x.strip() for x in query_groundtruth_docs]
-    #     queries_groundtruth_docs_list.append(query_groundtruth_docs)
+    #    query_groundtruth_docs = q_file.readlines()
+    #    query_groundtruth_docs = [x.strip() for x in query_groundtruth_docs]
+    #    queries_groundtruth_docs_list.append(query_groundtruth_docs)
 
-    queries = ['"Chinese signature" AND petitioners', 'horse racing bet',
-               'magistrate impose action']
+    queries = ['government problem', 'illegal racing bet','chinese magistrate petitioners']
     queries_groundtruth_docs_list = [
-        [246403, 246427], [246403, 246427], [246403, 246427]]
+      [246403, 246427], [246403, 246427], [246403, 246427]]
 
     # Process each query and store the results in a list
     # query_results = [[result for query1],[result for query 2]...]
@@ -86,11 +84,11 @@ def run_search(dict_file, postings_file, queries_file, results_file):
         document_dict = process_documents(
             query_dict, sorted_index_dict, docLengths_dict, postings)
 
-        print("document_dict", document_dict.keys())
+        #print("document_dict", document_dict.keys())
 
         # Generates the top 10 documents for the query
         scores = process_scores(
-            query_dict, document_dict, relevantDocs_dict, query_groundtruth_docs, rocchio_config)
+            query_dict, document_dict)
 
         query_results.append(scores)
 
@@ -144,7 +142,6 @@ def process_query(input_query, sorted_index_dict, collection_size, stemmer, rocc
                 query_dict[t_z] += 1
             else:
                 query_dict[t_z] = 1
-            # print(t_z)
 
     # Denominator for normalization of tf-idf (query)
     normalize_query = 0
@@ -178,7 +175,7 @@ def process_query(input_query, sorted_index_dict, collection_size, stemmer, rocc
     Document Vector1: B C D
     Document Vector2: C D E
     Document Vector3: X Y Z
-    Centroid Vector: B 2C 2D E X Y Z
+    Centroid VectorSum: B 2C 2D E X Y Z
     '''
     # Set use_rocchio to False if not using query refinement
     if rocchio_config['use_rocchio']:
@@ -195,16 +192,16 @@ def process_query(input_query, sorted_index_dict, collection_size, stemmer, rocc
                 else:
                     centroid_dict[term] += tf_idf
 
-        for term in centroid_dict.keys():  # Divide the vector sum by the number of relevant documents
-            centroid_score = centroid_dict[term] / num_groundtruth_doc
+        for term in centroid_dict.keys():  
+            centroid_score = centroid_dict[term] / num_groundtruth_doc # Divide the vector sum by the number of relevant documents
             weighted_centroid_score = centroid_score * \
-                rocchio_config['rocchio_beta']
+                rocchio_config['rocchio_beta'] # Weighted centroid score using the rocchio beta weight
             if term in query_dict.keys():
                 query_weight = query_dict[term]
                 query_weight += weighted_centroid_score
-                query_dict[term] = query_weight
+                query_dict[term] = query_weight # equals 1*query_dict[term] + 0.2*weighted_centroid_score
             else:
-                query_dict[term] = weighted_centroid_score
+                query_dict[term] = weighted_centroid_score # equals 0.2*weighted_centroid_score
 
     return query_dict
 
@@ -259,7 +256,7 @@ def process_documents(query_dictionary, sorted_index_dict, docLengths_dict, inpu
     return document_dict
 
 
-def process_scores(query_dictionary, document_dictionary, relevantDocs_dict, query_groundtruth_docs, rocchio_config):
+def process_scores(query_dictionary, document_dictionary):
     '''
     Computes the cosine-normalized query-document score for all terms for each document.
     Returns a list of the top 10 most relevant documents based on the query-document score. 
@@ -320,7 +317,10 @@ def process_scores(query_dictionary, document_dictionary, relevantDocs_dict, que
         result.append((docID, docScore))
 
     # Use heapq library 'nlargest' function to return top 10 results in O(10logn) time instead of sorting the entire array which takes O(nlogn) time
-    return nlargest(10, result, key=lambda x: x[1])
+    # return nlargest(10, result, key=lambda x: x[1])
+
+    # Return results in descending order without top K-threshold
+    return sorted(result, key=lambda x: x[1], reverse=True) 
 
 
 dictionary_file = postings_file = file_of_queries = output_file_of_results = None
