@@ -153,10 +153,8 @@ def build_index(in_dir, out_dict, out_postings):
 
     # Obtain relevant document vector containing top-20 tf-idf weights for pseudo-relevance feedback
     for docId, docLength in docLengths_dict.items():
-        relevantDoc = {}
-        print(
-            docLengths_dict[docId], 'docLength: ', docLength)
-        normalize_doc = docLengths_dict[docId]
+        # temporary dictionary used to store all tf-idf weights in relevant documents before sorting
+        temp_relevantDoc_dict = {}
         for term in postings_dict.keys():
             if docId in postings_dict[term]:
                 # Calculate tf-wt
@@ -171,14 +169,14 @@ def build_index(in_dir, out_dict, out_postings):
                 d_wt = d_tf_wt * d_idf
 
                 # Perform cosine normalization
-                d_normalize_wt = d_wt/normalize_doc
+                d_normalize_wt = d_wt/docLength
 
-                relevantDoc[term] = d_normalize_wt
+                temp_relevantDoc_dict[term] = d_normalize_wt
 
         # Sort and obtain top-20 tf-idf weights in descending order
         # sorted_relevantDoc = {term1: tf-idf1, term2: tf-idf2 ...}
         sorted_relevantDoc = sorted(
-            relevantDoc.items(), key=lambda x: x[1], reverse=True)[:20]
+            temp_relevantDoc_dict.items(), key=lambda x: x[1], reverse=True)[:20]
 
         # Store relevant document vector
         relevantDocs_dict[docId] = sorted_relevantDoc
