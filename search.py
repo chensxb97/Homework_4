@@ -15,7 +15,6 @@ from heapq import nlargest
 # usage
 # python3 search.py -d dictionary.txt -p postings.txt  -q queries.zip -o results.txt
 
-
 def usage():
     print("usage: " +
           sys.argv[0] + " -d dictionary-file -p postings-file -q file-of-queries -o output-file-of-results")
@@ -58,7 +57,7 @@ def run_search(dict_file, postings_file, queries_file, results_file):
     q_zf = ZipFile(queries_file)
     queries = []
     queries_groundtruth_docs_list = []
-
+    
     # for i in range(1,len(q_zf.namelist())+1):
     #     q_file = io.TextIOWrapper(q_zf.open("q{}.txt".format(i)), encoding="utf-8")
     #     query = (q_file.readline()).strip()
@@ -67,12 +66,12 @@ def run_search(dict_file, postings_file, queries_file, results_file):
     #     query_groundtruth_docs = q_file.readlines()
     #     query_groundtruth_docs = [x.strip() for x in query_groundtruth_docs]
     #     queries_groundtruth_docs_list.append(query_groundtruth_docs)
+    
+    queries = ['quiet phone call', 'good grades exchange scandal', '"fertility treatment" AND damages']
+    # queries_groundtruth_docs_list = [['246403','246407'],['246403', '246407'],['246403', '246407']] 
+    queries_groundtruth_docs_list = [[246403, 246427],[246403, 246427],[246403, 246427]]
+    
 
-    queries = ['quiet phone call', 'good grades exchange scandal',
-               '"fertility treatment" AND damages']
-    # queries_groundtruth_docs_list = [['246403','246407'],['246403', '246407'],['246403', '246407']]
-    queries_groundtruth_docs_list = [
-        [246403, 246427], [246403, 246427], [246403, 246427]]
 
     # Process each query and store the results in a list
     # query_results = [[result for query1],[result for query 2]...]
@@ -80,19 +79,16 @@ def run_search(dict_file, postings_file, queries_file, results_file):
     for query_index, query in enumerate(queries):
         query_groundtruth_docs = queries_groundtruth_docs_list[query_index]
         # Store all normalized query tf-idf weights in query_dict
-        query_dict = process_query(
-            query, sorted_index_dict, collection_size, stemmer)
-
+        query_dict = process_query(query, sorted_index_dict, collection_size, stemmer)
+        
         # Store all normalized document tf weights in document_dict
-        document_dict = process_documents(
-            query_dict, sorted_index_dict, docLengths_dict, postings)
+        document_dict = process_documents(query_dict, sorted_index_dict, docLengths_dict, postings)
 
         print("document_dict", document_dict.keys())
-
+        
         # Generates the top 10 documents for the query
-        scores = process_scores(
-            query_dict, document_dict, relevantDocs_dict, query_groundtruth_docs, rocchio_config)
-
+        scores = process_scores(query_dict, document_dict, relevantDocs_dict, query_groundtruth_docs, rocchio_config)
+        
         query_results.append(scores)
 
     # Write query results into output results_file
@@ -117,32 +113,30 @@ def process_query(input_query, sorted_index_dict, collection_size, stemmer):
     Processes and extracts terms/phrases from the input query.
     Returns a dictionary containing the normalized tf-idf weights for each term/phrase.
     query_dict = {term: normalized tf-idf-wt}
-
     '''
     query_dict = {}
 
-    zones = ['title', 'content', 'date_posted', 'court']
+    zones = ['title','content', 'date_posted','court']
 
     # Word processing and tokenisation for query terms
     if 'AND' in input_query:
-        tokens = input_query.split('AND')  # Separate the phrases/terms
+        tokens = input_query.split('AND') # Separate the phrases/terms
     else:
         tokens = input_query.split(' ')
-    for t in tokens:
+    for t in tokens: 
         if '"' in t:
-            t = t.replace('"', '')  # Remove inverted commas
-        t = t.strip()  # Remove trailing whitespaces
-        t = t.lower()  # lower case-folding
-        if ' ' in t:  # Checks if t is a phrase
+            t = t.replace('"','') # Remove inverted commas
+        t = t.strip() # Remove trailing whitespaces
+        t = t.lower() # lower case-folding
+        if ' ' in t: # Checks if t is a phrase
             split = t.split(' ')
-            stemmed = [stemmer.stem(word)
-                       for word in split]  # stem individual terms
-            t = '&'.join(split)  # Stemmed phrase with & as the delimiter
+            stemmed = [stemmer.stem(word) for word in split] # stem individual terms
+            t = '&'.join(split) # Stemmed phrase with & as the delimiter
         else:
-            t = stemmer.stem(t)  # Stem lone term
+            t = stemmer.stem(t) # Stem lone term
         for z in zones:
-            t_z = t + '_{}'.format(z)  # Transform 'term' to 'term_zone'
-            if t_z in query_dict.keys():  # Populate query_dict
+            t_z = t + '_{}'.format(z) # Transform 'term' to 'term_zone'
+            if t_z in query_dict.keys(): # Populate query_dict
                 query_dict[t_z] += 1
             else:
                 query_dict[t_z] = 1
@@ -188,7 +182,6 @@ def process_documents(query_dictionary, sorted_index_dict, docLengths_dict, inpu
     Checks for each term recorded in the input query dictionary with the main index dictionary.
     Returns a document dictionary containing the normalized tf weights for each term found in the main index dictionary.
     document_dict = {document1: {term1: tf1, term2: tf2}, document2:{}...}
-
     '''
     # Returns None if no query dictionary is empty
     if query_dictionary == None:
@@ -238,10 +231,12 @@ def process_scores(query_dictionary, document_dictionary, relevantDocs_dict, que
     '''
     Computes the cosine-normalized query-document score for all terms for each document.
     Returns a list of the top 10 most relevant documents based on the query-document score. 
-
     '''
     # Original query: A B C
-    # Document Vector:  D E F G ... (without A, B and C)
+    # Document Vector1: B C D
+    # Document Vector2: C D E
+    # Document Vector3: X Y Z
+    # Centroid Vector: B 2C 2D E X Y Z
 
     # Set use_rocchio to False if not using query refinement
     if rocchio_config['use_rocchio']:
@@ -249,20 +244,16 @@ def process_scores(query_dictionary, document_dictionary, relevantDocs_dict, que
         num_groundtruth_doc = len(query_groundtruth_docs)
 
         for doc_id in query_groundtruth_docs:
-            centroid_dict = {}
+            centroid_dict = {} # Remove
 
             doc_vector = relevantDocs_dict[doc_id]
 
-            for (key, value) in doc_vector:  # For term weights in relevant document vector
+            for (term, tf_idf) in doc_vector: # Iterate term weights in the relevant document vector
                 if key not in centroid_dict:
-                    # Appending term keys in centroid_dict
-                    centroid_dict[key] = value
+                    centroid_dict[term] = tf_idf 
+                else centroid_dict[term] += tf_idf
 
-            for word in query_dictionary.keys():  # To include original query term weights if not included previously
-                if word not in centroid_dict:
-                    centroid_dict[key] = query_dictionary[word]
-
-        for term, value in centroid_dict.items():  # To normalize the centroid vector
+        for term in centroid_dict.keys(): # Divide the vector sum by the number of relevant documents
             centroid_dict[term] /= num_groundtruth_doc
 
     # Returns an empty result if query dictionary is empty
@@ -276,11 +267,9 @@ def process_scores(query_dictionary, document_dictionary, relevantDocs_dict, que
         for term in query_dictionary.keys():
             if rocchio_config['use_rocchio']:
                 if term in centroid_dict:
-                    doc_wt = document_dictionary[docID][term] * rocchio_config['rocchio_alpha'] + \
-                        centroid_dict[term] * rocchio_config['rocchio_beta']
+                    doc_wt = document_dictionary[docID][term] * rocchio_config['rocchio_alpha'] + centroid_dict[term] * rocchio_config['rocchio_beta']
                 else:
-                    # *1 here for reference compared to *alpha
-                    doc_wt = document_dictionary[docID][term] * 1
+                    doc_wt = document_dictionary[docID][term] * 1 # *1 here for reference compared to *alpha
             else:
                 doc_wt = document_dictionary[docID][term]
             term_wt = query_dictionary[term]
