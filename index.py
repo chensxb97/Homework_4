@@ -69,7 +69,8 @@ def build_index(in_dir, out_dict, out_postings):
             termSet = set()
 
             raw_text = record[zone]
-            raw_text = raw_text.lower()
+            raw_text = raw_text.lower()1
+            print(raw_text)
             for sentence in nltk.sent_tokenize(raw_text):
                 clean_text = ''
                 for c in sentence:
@@ -118,9 +119,10 @@ def build_index(in_dir, out_dict, out_postings):
 
         docLength = math.sqrt(docLength)
         docLengths_dict[docId] = docLength
-
         # Increment collection size
         collection_size += 1
+        if i == 2:
+            return
 
     # Sort index_dict
     sorted_index_dict_array = sorted(index_dict.items())
