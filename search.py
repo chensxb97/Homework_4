@@ -27,19 +27,25 @@ def run_search(dict_file, postings_file, queries_file, results_file):
     perform searching on the given queries file and output the results to a file
     """
     print('running search on the queries...')
-    # This is an empty method
-    # Pls implement your code in below
 
-    # Rocchio Configuration Settings
-    rocchio_config = {
-        "use_rocchio": True,
-        "rocchio_alpha": 1,
-        "rocchio_beta": 0.2
-    }
-    wordNet_config = {
-        "use_wordNet": True,
-        "word_limit": 20,
-        "weight": 0.1
+    # Configuration Parameter Settings
+    global_config = {
+        # Weights assigned to term in each zone
+        'zones': {'title': 0.4, 'content': 0.4, 'date_posted': 0.1, 'court': 0.1},
+
+        # Rocchio Query Refinement Configuration Settings
+        'rocchio': {
+            "use_rocchio": True,
+            "rocchio_alpha": 1,
+            "rocchio_beta": 0.2
+        },
+
+        # Wordnet Query Expansion Configuration Settings
+        'wordnet': {
+            "use_wordnet": True,
+            "word_limit": 20,
+            "weight": 0.1
+        }
     }
 
     # Initialise stemmer
@@ -86,7 +92,7 @@ def run_search(dict_file, postings_file, queries_file, results_file):
         query_groundtruth_docs = queries_groundtruth_docs_list[query_index]
         # Store all normalized query tf-idf weights in query_dict
         query_dict = process_query(
-            query, sorted_index_dict, collection_size, stemmer, wordNet_config, rocchio_config, query_groundtruth_docs, relevantDocs_dict)
+            query, sorted_index_dict, collection_size, stemmer, global_config, query_groundtruth_docs, relevantDocs_dict)
 
         # Store all normalized document tf weights in document_dict
         document_dict = process_documents(
@@ -117,17 +123,90 @@ def run_search(dict_file, postings_file, queries_file, results_file):
     print('done!')
 
 
-def process_query(input_query, sorted_index_dict, collection_size, stemmer, wordNet_config, rocchio_config, query_groundtruth_docs, relevantDocs_dict):
+def rocchio_algorithm(rocchio_config, query_groundtruth_docs, relevantDocs_dict, query_dict):
+    # ROCCHIO FORMULA QUERY REFINEMENT
+    # Set use_rocchio to False if not using query refinement
+    centroid_dict = {}
+    num_groundtruth_doc = len(query_groundtruth_docs)
+
+    for doc_id in query_groundtruth_docs:
+
+        doc_vector = relevantDocs_dict[doc_id]
+
+        for (term, tf_idf) in doc_vector:  # Iterate term weights in the relevant document vector
+            if term not in centroid_dict:
+                centroid_dict[term] = tf_idf
+            else:
+                centroid_dict[term] += tf_idf
+
+    for term in centroid_dict.keys():
+        # Divide the vector sum by the number of relevant documents
+        centroid_score = centroid_dict[term] / num_groundtruth_doc
+        weighted_centroid_score = centroid_score * \
+            rocchio_config['rocchio_beta']  # Weighted centroid score using the rocchio beta weight
+        if term in query_dict.keys():
+            query_weight = query_dict[term]
+            query_weight += weighted_centroid_score
+            # equals 1*query_dict[term] + 0.2*weighted_centroid_score
+            query_dict[term] = query_weight
+        else:
+            # equals 0.2*weighted_centroid_score
+            query_dict[term] = weighted_centroid_score
+    return query_dict
+
+
+def run_wordnet(query_dict, original_query, wordnet_config, stemmer, zone_weights):
+
+    # WORDNET QUERY EXPANSION
+    # Set use_wordNet to False if not using query expansion
+
+    limit = wordnet_config['word_limit']
+    num_terms = len(original_query)
+    partition = ([limit // num_terms + (1 if x < limit %
+                                        num_terms else 0) for x in range(num_terms)])
+    expanded_query = []
+    total_count = 0
+    for i in range(num_terms):
+        expanded_count = 0
+        synsets = wn.synsets(original_query[i])
+        for synset in synsets:
+            for new_term in synset.lemma_names():
+                if original_query[i] == new_term:
+                    continue
+                if expanded_count == partition[i]:
+                    break
+                expanded_query.append(new_term)
+                expanded_count += 1
+        total_count += expanded_count
+    # Expanded_query = ['term1','term2','term3' ...]
+    for t in expanded_query:
+        if ' ' in t:  # Checks if t is a phrase
+            split = t.split(' ')
+            stemmed = [stemmer.stem(word)
+                       for word in split]  # stem individual terms
+            t = '&'.join(split)  # Stemmed phrase with & as the delimiter
+        else:
+            t = stemmer.stem(t)  # Stem lone term
+        for z in zone_weights.keys():
+            t_z = t + '_{}'.format(z)  # Transform 'term' to 'term_zone'
+            if t_z in query_dict.keys():  # Populate query_dict
+                query_dict[t_z] += zone_weights[z]
+            else:
+                query_dict[t_z] = zone_weights[z]
+    return query_dict
+
+
+def process_query(input_query, sorted_index_dict, collection_size, stemmer, global_config, query_groundtruth_docs, relevantDocs_dict):
     '''
     Processes and extracts terms/phrases from the input query.
     Returns a dictionary containing the normalized tf-idf weights for each term/phrase.
     query_dict = {term: normalized tf-idf-wt}
     '''
     query_dict = {}
-
-    zones = ['title', 'content', 'date_posted', 'court']
-
     original_query = []
+    zone_weights = global_config['zones']
+    rocchio_config = global_config['rocchio']
+    wordnet_config = global_config['wordnet']
 
     # Word processing and tokenisation for query terms
     if 'AND' in input_query:
@@ -147,53 +226,20 @@ def process_query(input_query, sorted_index_dict, collection_size, stemmer, word
             t = '&'.join(split)  # Stemmed phrase with & as the delimiter
         else:
             t = stemmer.stem(t)  # Stem lone term
-        for z in zones:
+        for z in zone_weights.keys():
             t_z = t + '_{}'.format(z)  # Transform 'term' to 'term_zone'
             if t_z in query_dict.keys():  # Populate query_dict
-                query_dict[t_z] += 1
+                query_dict[t_z] += zone_weights[z]
             else:
-                query_dict[t_z] = 1
+                query_dict[t_z] = zone_weights[z]
 
     print('first one', query_dict)
     print('length', len(query_dict))
 
     # WORDNET QUERY EXPANSION
-    # Set use_wordNet to False if not using query expansion
-    if wordNet_config['use_wordNet']:
-        limit = wordNet_config['word_limit']
-        num_terms = len(original_query)
-        partition = ([limit // num_terms + (1 if x < limit %
-                                            num_terms else 0) for x in range(num_terms)])
-        expanded_query = []
-        total_count = 0
-        for i in range(num_terms):
-            expanded_count = 0
-            synsets = wn.synsets(original_query[i])
-            for synset in synsets:
-                for new_term in synset.lemma_names():
-                    if original_query[i] == new_term:
-                        continue
-                    if expanded_count == partition[i]:
-                        break
-                    expanded_query.append(new_term)
-                    expanded_count += 1
-            total_count += expanded_count
-
-        # Expanded_query = ['term1','term2','term3' ...]
-        for t in expanded_query:
-            if ' ' in t:  # Checks if t is a phrase
-                split = t.split(' ')
-                stemmed = [stemmer.stem(word)
-                           for word in split]  # stem individual terms
-                t = '&'.join(split)  # Stemmed phrase with & as the delimiter
-            else:
-                t = stemmer.stem(t)  # Stem lone term
-            for z in zones:
-                t_z = t + '_{}'.format(z)  # Transform 'term' to 'term_zone'
-                if t_z in query_dict.keys():  # Populate query_dict
-                    query_dict[t_z] += 1
-                else:
-                    query_dict[t_z] = 1
+    if wordnet_config['use_wordnet']:
+        query_dict = run_wordnet(
+            query_dict, original_query, wordnet_config, stemmer, zone_weights)
 
     # Calcualte tf-idf-wt for query terms
     for t_z in query_dict.keys():
@@ -213,38 +259,16 @@ def process_query(input_query, sorted_index_dict, collection_size, stemmer, word
         # Store wt for each term_zone in query back into dictionary
         query_dict[t_z] = q_wt
 
-    print('second one', query_dict)
+    print('after wordnet', query_dict)
     print('length', len(query_dict))
 
     # ROCCHIO FORMULA QUERY REFINEMENT
-    # Set use_rocchio to False if not using query refinement
     if rocchio_config['use_rocchio']:
-        centroid_dict = {}
-        num_groundtruth_doc = len(query_groundtruth_docs)
+        query_dict = rocchio_algorithm(rocchio_config, query_groundtruth_docs,
+                                       relevantDocs_dict, query_dict)
 
-        for doc_id in query_groundtruth_docs:
-
-            doc_vector = relevantDocs_dict[doc_id]
-
-            for (term, tf_idf) in doc_vector:  # Iterate term weights in the relevant document vector
-                if term not in centroid_dict:
-                    centroid_dict[term] = tf_idf
-                else:
-                    centroid_dict[term] += tf_idf
-
-        for term in centroid_dict.keys():
-            # Divide the vector sum by the number of relevant documents
-            centroid_score = centroid_dict[term] / num_groundtruth_doc
-            weighted_centroid_score = centroid_score * \
-                rocchio_config['rocchio_beta']  # Weighted centroid score using the rocchio beta weight
-            if term in query_dict.keys():
-                query_weight = query_dict[term]
-                query_weight += weighted_centroid_score
-                # equals 1*query_dict[term] + 0.2*weighted_centroid_score
-                query_dict[term] = query_weight
-            else:
-                # equals 0.2*weighted_centroid_score
-                query_dict[term] = weighted_centroid_score
+    print('after wordnet and rocchio', query_dict)
+    print('length', len(query_dict))
 
     return query_dict
 
