@@ -52,13 +52,13 @@ def build_index(in_dir, out_dict, out_postings):
     df["document_id"] = pd.to_numeric(df['document_id'])
     df = df.sort_values(by=['document_id'])
 
-    # Test with the first 50 documents
     # Word processing and tokenisation for each document
     # For each document, we iterate through its zones and populate postings_dict and index_dict
-    n = 50
+    n = df.size
     for i in range(n):
         record = df.iloc[i]
         docId = record['document_id']
+        print('start_{}'.format(docId))
         docLength = 0
         for zone in zones:
             # Store all observed terms in a list, used to track termFrequency
@@ -118,6 +118,8 @@ def build_index(in_dir, out_dict, out_postings):
 
         # Increment collection size
         collection_size += 1
+        print('end_{}'.format(docId))
+        print('Indexed: {}/{}'.format(collection_size,n)) # Log progress
 
     # Sort index_dict
     sorted_index_dict_array = sorted(index_dict.items())
