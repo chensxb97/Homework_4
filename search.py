@@ -10,9 +10,11 @@ import time
 import io
 from zipfile import ZipFile
 from nltk.stem.porter import PorterStemmer
+from nltk.corpus import wordnet as wn
 
 # usage
 # python3 search.py -d dictionary.txt -p postings.txt  -q queries.zip -o results.txt
+
 
 def usage():
     print("usage: " +
@@ -33,6 +35,11 @@ def run_search(dict_file, postings_file, queries_file, results_file):
         "use_rocchio": True,
         "rocchio_alpha": 1,
         "rocchio_beta": 0.2
+    }
+    wordNet_config = {
+        "use_wordNet": True,
+        "word_limit": 20,
+        "weight": 0.1
     }
 
     # Initialise stemmer
@@ -57,14 +64,20 @@ def run_search(dict_file, postings_file, queries_file, results_file):
     queries = []
     queries_groundtruth_docs_list = []
 
-    for i in range(1,len(q_zf.namelist())+1):
-        q_file = io.TextIOWrapper(q_zf.open("q{}.txt".format(i)), encoding="utf-8")
-        query = (q_file.readline()).strip()
-        queries.append(query)
+    # for i in range(1, len(q_zf.namelist())+1):
+    #     q_file = io.TextIOWrapper(
+    #         q_zf.open("q{}.txt".format(i)), encoding="utf-8")
+    #     query = (q_file.readline()).strip()
+    #     queries.append(query)
 
-        query_groundtruth_docs = q_file.readlines()
-        query_groundtruth_docs = [x.strip() for x in query_groundtruth_docs]
-        queries_groundtruth_docs_list.append(query_groundtruth_docs)
+    #     query_groundtruth_docs = q_file.readlines()
+    #     query_groundtruth_docs = [x.strip() for x in query_groundtruth_docs]
+    #     queries_groundtruth_docs_list.append(query_groundtruth_docs)
+
+    queries = ['government problem', 'illegal racing bet',
+               'chinese magistrate petitioners']
+    queries_groundtruth_docs_list = [
+        [246403, 246427], [246403, 246427], [246403, 246427]]
 
     # Process each query and store the results in a list
     # query_results = [[result for query1],[result for query 2]...]
@@ -73,7 +86,7 @@ def run_search(dict_file, postings_file, queries_file, results_file):
         query_groundtruth_docs = queries_groundtruth_docs_list[query_index]
         # Store all normalized query tf-idf weights in query_dict
         query_dict = process_query(
-            query, sorted_index_dict, collection_size, stemmer, rocchio_config, query_groundtruth_docs, relevantDocs_dict)
+            query, sorted_index_dict, collection_size, stemmer, wordNet_config, rocchio_config, query_groundtruth_docs, relevantDocs_dict)
 
         # Store all normalized document tf weights in document_dict
         document_dict = process_documents(
@@ -83,7 +96,7 @@ def run_search(dict_file, postings_file, queries_file, results_file):
 
         # Generates the top 10 documents for the query
         scores = process_scores(
-            query_dict, document_dict,docLengths_dict)
+            query_dict, document_dict, docLengths_dict)
 
         query_results.append(scores)
 
@@ -104,7 +117,7 @@ def run_search(dict_file, postings_file, queries_file, results_file):
     print('done!')
 
 
-def process_query(input_query, sorted_index_dict, collection_size, stemmer, rocchio_config, query_groundtruth_docs, relevantDocs_dict):
+def process_query(input_query, sorted_index_dict, collection_size, stemmer, wordNet_config, rocchio_config, query_groundtruth_docs, relevantDocs_dict):
     '''
     Processes and extracts terms/phrases from the input query.
     Returns a dictionary containing the normalized tf-idf weights for each term/phrase.
@@ -113,6 +126,8 @@ def process_query(input_query, sorted_index_dict, collection_size, stemmer, rocc
     query_dict = {}
 
     zones = ['title', 'content', 'date_posted', 'court']
+
+    original_query = []
 
     # Word processing and tokenisation for query terms
     if 'AND' in input_query:
@@ -124,6 +139,7 @@ def process_query(input_query, sorted_index_dict, collection_size, stemmer, rocc
             t = t.replace('"', '')  # Remove inverted commas
         t = t.strip()  # Remove trailing whitespaces
         t = t.lower()  # lower case-folding
+        original_query.append(t)
         if ' ' in t:  # Checks if t is a phrase
             split = t.split(' ')
             stemmed = [stemmer.stem(word)
@@ -137,6 +153,47 @@ def process_query(input_query, sorted_index_dict, collection_size, stemmer, rocc
                 query_dict[t_z] += 1
             else:
                 query_dict[t_z] = 1
+
+    print('first one', query_dict)
+    print('length', len(query_dict))
+
+    # WORDNET QUERY EXPANSION
+    # Set use_wordNet to False if not using query expansion
+    if wordNet_config['use_wordNet']:
+        limit = wordNet_config['word_limit']
+        num_terms = len(original_query)
+        partition = ([limit // num_terms + (1 if x < limit %
+                                            num_terms else 0) for x in range(num_terms)])
+        expanded_query = []
+        total_count = 0
+        for i in range(num_terms):
+            expanded_count = 0
+            synsets = wn.synsets(original_query[i])
+            for synset in synsets:
+                for new_term in synset.lemma_names():
+                    if original_query[i] == new_term:
+                        continue
+                    if expanded_count == partition[i]:
+                        break
+                    expanded_query.append(new_term)
+                    expanded_count += 1
+            total_count += expanded_count
+
+        # Expanded_query = ['term1','term2','term3' ...]
+        for t in expanded_query:
+            if ' ' in t:  # Checks if t is a phrase
+                split = t.split(' ')
+                stemmed = [stemmer.stem(word)
+                           for word in split]  # stem individual terms
+                t = '&'.join(split)  # Stemmed phrase with & as the delimiter
+            else:
+                t = stemmer.stem(t)  # Stem lone term
+            for z in zones:
+                t_z = t + '_{}'.format(z)  # Transform 'term' to 'term_zone'
+                if t_z in query_dict.keys():  # Populate query_dict
+                    query_dict[t_z] += 1
+                else:
+                    query_dict[t_z] = 1
 
     # Calcualte tf-idf-wt for query terms
     for t_z in query_dict.keys():
@@ -156,6 +213,9 @@ def process_query(input_query, sorted_index_dict, collection_size, stemmer, rocc
         # Store wt for each term_zone in query back into dictionary
         query_dict[t_z] = q_wt
 
+    print('second one', query_dict)
+    print('length', len(query_dict))
+
     # ROCCHIO FORMULA QUERY REFINEMENT
     # Set use_rocchio to False if not using query refinement
     if rocchio_config['use_rocchio']:
@@ -173,15 +233,18 @@ def process_query(input_query, sorted_index_dict, collection_size, stemmer, rocc
                     centroid_dict[term] += tf_idf
 
         for term in centroid_dict.keys():
-            centroid_score = centroid_dict[term] / num_groundtruth_doc # Divide the vector sum by the number of relevant documents
+            # Divide the vector sum by the number of relevant documents
+            centroid_score = centroid_dict[term] / num_groundtruth_doc
             weighted_centroid_score = centroid_score * \
-                rocchio_config['rocchio_beta'] # Weighted centroid score using the rocchio beta weight
+                rocchio_config['rocchio_beta']  # Weighted centroid score using the rocchio beta weight
             if term in query_dict.keys():
                 query_weight = query_dict[term]
                 query_weight += weighted_centroid_score
-                query_dict[term] = query_weight # equals 1*query_dict[term] + 0.2*weighted_centroid_score
+                # equals 1*query_dict[term] + 0.2*weighted_centroid_score
+                query_dict[term] = query_weight
             else:
-                query_dict[term] = weighted_centroid_score # equals 0.2*weighted_centroid_score
+                # equals 0.2*weighted_centroid_score
+                query_dict[term] = weighted_centroid_score
 
     return query_dict
 
@@ -230,7 +293,7 @@ def process_documents(query_dictionary, sorted_index_dict, input_postings):
     return document_dict
 
 
-def process_scores(query_dictionary, document_dictionary,docLengths_dict):
+def process_scores(query_dictionary, document_dictionary, docLengths_dict):
     '''
     Computes the cosine-normalized query-document score for all terms for each document.
     Returns a list of the top 10 most relevant documents based on the query-document score. 
