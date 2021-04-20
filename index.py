@@ -187,7 +187,7 @@ def build_index(in_dir, out_dict, out_postings):
     # Save index, length dictionaries and collection size using pickle
     pickle.dump([sorted_index_dict, docLengths_dict, relevantDocs_dict,
                  collection_size], open(out_dict, "wb"))
-    print('done!')
+    print('Indexing done!')
 
 
 def get_ngrams(text, n):
