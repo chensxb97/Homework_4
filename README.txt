@@ -21,11 +21,12 @@ are usually sufficient.
 
 The index dictionary is built by processing terms from the legal corpus, Intellex’s dataset. 
 
-After case-folding all words to lowercase, stemming, and removing punctuations, terms are stored in both a set(to ensure no duplicates) and a list(to track term frequencies), and are saved in the dictionary, sorted by term in ascending order, with the 
-following format: {term: [termID, docFrequency, charOffset, stringLength]}.
+After case-folding all words to lowercase, stemming, and removing punctuations, terms(unigams, bigrams and trigrams) are stored in both a set(to ensure no duplicates) and a list(to track term frequencies), and are saved in the dictionary, sorted by term in ascending order, with the 
+following format: {term: [termID, docFrequency, charOffset, stringLength]}. To uniquely identify terms for each zone(title, content, date_posted and court), we append the name of the zone to the end of the term string. Thus, it is possible for the same term to have up to 4 unique keys in the index.
+Eg. term: happy -> keys: happy_title, happy_content, happy_date_posted, happy_court
 
-- term(string) refers to the processed and stemmed word
-- termID(int) is a unique ID associated with each word after the words have all been sorted in ascending order
+- term(string) refers to the processed and stemmed term
+- termID(int) is a unique ID associated with each term after the term have all been sorted in ascending order
 - docFrequency(int) is the number of unique documents each term exists in
 - charOffset(int) are character offset values which point to the start of the posting list in the postings file for that term.
 - stringLength(int) states the length of the posting list generated for that term.
@@ -38,29 +39,33 @@ We also created a postings dictionary that stores the docId-termFrequency pairs 
 To build the postings file, we iterate through the terms from the postings dictionary and obtain each term's dictionary of docId-termFrequency pairs. We then construct the posting string using the value-pairs, with markers '^' to separate the docId and termFrequency and ',' to separate the pairs. 
 After updating the charOffset and stringLength values in the main index dictionary, we write and save the posting strings to the output posting file.
 
-For our query refinement process, we have included an additional step in the indexing phase to get the relevant document vector containing the top 20 tf-idf weights with the pseudo-relevance feedback. For each document ID, we then sort and obtain these weights in descending order and store it in a new dictionary (relevantDocs_dict). We then pickle and store this dictionary to be used in search.py. We will later extract these weights and use it in our scoring system as part of the Rocchio’s Algorithm.
+For our query refinement process, we have included an additional step in the indexing phase to obtain relevant document vectors containing the top 20 tf-idf weights with the pseudo-relevance feedback. For each document ID, we sort and obtain these weights in descending order and store it in a new dictionary, with the following format: {docID: relevant document vector}. We will later extract these weights and use it in our scoring system as part of the Rocchio’s Algorithm.
 
-Lastly, we save the finalised index dictionary, document lengths dictionary and collection size value as a list in a pickled file so that they could be easily re-loaded in memory to be used in search.py.
+Lastly, we save the finalised index dictionary, document lengths dictionary, relevant documents dictionary and collection size value as a list in a pickled file so that they could be easily re-loaded in memory to be used in search.py.
 
 
 = Searching =
 
-The search algorithm takes in the pickled index dictionary, document lengths dictionary, collection size, postings file and queries as input arguments.
-The objective is to process each query and obtain all the documents that are relevant to the query using the vector space model, with the exploration and implementation of query refinement and expansion (which can be activated or deactivated via a boolean flag value).
+The search algorithm takes in the pickled index dictionary, document lengths dictionary,relevant documents dictionary, collection size, postings file and queries as input arguments.
+The objective is to process each query and obtain all the documents that are relevant to the query using the vector space model, with the exploration and implementation of query expansion and refinement(which can be activated or deactivated via a boolean flag value).
 
-For the Rocchio Algorithm, the rocchio configuration settings are initialised in the rocchio_config dictionary and contain the boolean flag (use_rocchio) to activate the rocchio algorithm and corresponding alpha and beta values. These alpha and beta values determine the weightage assigned to the original vector space model and the query refinement for the relevant documents respectively. In this implementation, we utilised positive feedback from relevant documents in alignment with many other IR systems which only utilise positive feedback.
+To expand our query, we use nltk's wordnet to populate the query with synonyms and/or related words. The wordnet configuration settins are initialised in the wordnet_config dictionary and contain the boolean flag(use_wordnet) to run the original query on wordnet to populate it with a corresponding number of synonyms(word limit). The word limit determines how many new terms we choose to include in the original query. In this implementation, we utilise a word limit of 20 synonyms sampled equally across the original query terms. 
+Eg. With 5 terms/phrases identified in the original query, we expand the query with 4 additional synonyms per term/phrase to fulfil the word limit of 20.
+
+To refine our query, the Rocchio Algorithm is implemented. Likewise, the rocchio configuration settings are initialised in the rocchio_config dictionary and contain the boolean flag (use_rocchio) to activate the rocchio algorithm and corresponding alpha and beta values. These alpha and beta values determine the weightage assigned to the original vector space model and the query refinement for the relevant documents respectively. In this implementation, we utilised positive feedback from relevant documents in alignment with many other IR systems which only utilise positive feedback.
 
 Breaking down each query, we extract the terms (by performing the same pre-processing as in index.py) and store them and their individual computed tf-weights
-(tf-weight = 1+ log10(tf)) in a dictionary. For every term, we obtain their docFrequencies by accessing the index dictionary and compute their individual idfs (idf = log10(collection_size/docFrequency). 
-We compute and store each term's tf-idf weight score back in the dictionary. Lastly, we normalize each weight by the query's length.
-The resulting query dictionary has the following format : {term1: tf-idf1/queryLength, term2: tf-idf2/queryLength}. The Rocchio Formula query refinement is then factored in subsequently should the boolean activation flag be turned on. The top 20 most important terms are selected and added into the query vector with a predefined weight applied (rocchio_beta). This is implemented by calculating the centroid and generating a weighted centroid score.
+(tf-weight = 1+ log10(tf)) in a dictionary. For every term, we obtain their docFrequencies by accessing the index dictionary and compute their individual idfs (idf = log10(collection_size/docFrequency).
+We compute and store each term's tf-idf weight score back in the dictionary.
+To account for zones, we generate 4 unique keys per query term by appending the zone to the term string. To distinguish the relative importance of each term in zones, we apply zone_weights to the tf-idf scores. Therefore,
+the resulting query dictionary will have the following format : {term_zone: tf-idf*zone_weight}. 
+The Rocchio Formula query refinement is then factored in subsequently should the boolean activation flag be turned on. The top 20 most important terms are selected and added into the query vector with a predefined weight applied (rocchio_beta). This is implemented by calculating the centroid and generating a weighted centroid score.
 
 Iterating through the terms in the query dictionary, we extract the posting strings from the posting file using seek(charOffset) and read(strLength). 
-We then obtain and compute each document's term's tf-weight as usual. Similarly, we normalize each weight by the pre-computed document's length from the document lengths dictionary.
-We then store each document term's normalized tf-weight in a dictionary of dictionaries.
-The resulting document dictionary has the following format: {doc1:{term1:tf-wt1/docLength1,term2:tf-wt2/docLength1},doc2:{term1:tf-wt1/docLength2,term2:tf-wt2/docLength2}}
+We then obtain and compute each document's term's tf-weight as usual. 
+The resulting document dictionary has the following format: {doc1:{term1:tf-wt1,term2:tf-wt2},doc2:{term1:tf-wt1,term2:tf-wt2}}
 
-To compute the vector scores, we iterate through both query and document dictionaries and sum up the tf-wt(document)*tf-idf(query) for each document, storing the scores in a list. 
+To compute the vector scores, we iterate through both query and document dictionaries and sum up the tf-wt(document) * tf-idf*zone_weight(query) for each document, followed by normalizing each score by the pre-computed document's length from the document lengths dictionary. These scores are then stored in a list. 
 
 Lastly, we write and save all the relevant document IDs for each query line by line to the output results file.
 
@@ -122,8 +127,8 @@ https://stackoverflow.com/questions/25318987/working-with-two-dictionaries-in-on
 Difference between 'split' and 'tokenize' methods when pre-processing text
 https://stackoverflow.com/questions/35345761/python-re-split-vs-nltk-word-tokenize-and-sent-tokenize
 
-Heapq library where we utilised the nlargest function
-https://docs.python.org/3/library/heapq.html
+Wordnet Documentation
+https://www.nltk.org/howto/wordnet.html
 
-Rocchio Algorithm Explaination
+Rocchio Algorithm Explanation
 https://youtu.be/yPd3vHCG7N4
