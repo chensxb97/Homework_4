@@ -45,7 +45,7 @@ def build_index(in_dir, out_dict, out_postings):
     # Load dataset
     df_zf = ZipFile(in_dir)  # Reading from zipped file
     df = pd.read_csv(df_zf.open('dataset.csv'))
-    # consider text from all zones except doc_id
+    # consider free text from all zones except doc_id
     zones = (df.columns).drop('document_id')
 
     # Sort the dataframe by doc_id in ascending order
@@ -72,11 +72,11 @@ def build_index(in_dir, out_dict, out_postings):
                 clean_text = ''
                 for c in sentence:
                     if c not in list_punc:
-                        clean_text += c
+                        clean_text += c # Remove punctuation
                 stemmed_words = [stemmer.stem(word) for word in nltk.word_tokenize(
-                    clean_text)]  # stem words within the sentence
+                    clean_text)]  # Stem words within the sentence
                 sentence = ' '.join(stemmed_words)
-                for i in range(1, 4):  # Generate unigrams, bigrams and trigrams
+                for i in range(1, 4): # Generate unigrams, bigrams and trigrams
                     gramList = []
                     gramList = get_ngrams(sentence, i)
                     for gram in gramList:
@@ -155,7 +155,7 @@ def build_index(in_dir, out_dict, out_postings):
 
     # Obtain relevant document vectors for pseudo-relevance feedback
     for docId, docLength in docLengths_dict.items():
-        # temporary dictionary used to store all tf-idf weights in relevant documents before sorting
+        # Temporary dictionary to store all tf-idf weights in relevant documents before sorting
         temp_relevantDoc_dict = {}
         for term in postings_dict.keys():
             if docId in postings_dict[term]:
@@ -182,6 +182,7 @@ def build_index(in_dir, out_dict, out_postings):
 
         # Store relevant document vector
         relevantDocs_dict[docId] = sorted_relevantDoc
+        
     print('Pickling...')
 
     # Save index, length dictionaries and collection size using pickle
