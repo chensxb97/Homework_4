@@ -15,11 +15,9 @@ from nltk.corpus import wordnet as wn
 # usage
 # python3 search.py -d dictionary.txt -p postings.txt  -q queries.zip -o results.txt
 
-
 def usage():
     print("usage: " +
           sys.argv[0] + " -d dictionary-file -p postings-file -q file-of-queries -o output-file-of-results")
-
 
 def run_search(dict_file, postings_file, queries_file, results_file):
     """
@@ -62,6 +60,7 @@ def run_search(dict_file, postings_file, queries_file, results_file):
     # Open and load dictionary
     # Sorted index dictionary is {term : [termID,docFrequency,charOffSet,strLength]}
     # Document length dictionary is {docID: cosine normalized document length}
+    # Relevant Documents dictionary is {docID: [relevant document vector]}
     # Collection size is the total number of documents, to be used for idf calculation
     in_dict = open(dict_file, 'rb')
     sorted_dict = pickle.load(in_dict)
@@ -94,7 +93,6 @@ def run_search(dict_file, postings_file, queries_file, results_file):
         [246403, 246427], [246403, 246427], [246403, 246427]]
 
     # Process each query and store the results in a list
-    # query_results = [[result for query1],[result for query 2]...]
     query_results = []
     for query_index, query in enumerate(queries):
         query_groundtruth_docs = queries_groundtruth_docs_list[query_index]
@@ -102,13 +100,11 @@ def run_search(dict_file, postings_file, queries_file, results_file):
         query_dict = process_query(
             query, sorted_index_dict, collection_size, stemmer, global_config, query_groundtruth_docs, relevantDocs_dict)
 
-        # Store all normalized document tf weights in document_dict
+        # Store all document tf weights in document_dict
         document_dict = process_documents(
             query_dict, sorted_index_dict, postings)
 
-        #print("document_dict", document_dict.keys())
-
-        # Generates the top 10 documents for the query
+        # Generates the relevant documents for the query
         scores = process_scores(
             query_dict, document_dict, docLengths_dict)
 
@@ -132,8 +128,10 @@ def run_search(dict_file, postings_file, queries_file, results_file):
 
 
 def rocchio_algorithm(rocchio_config, query_groundtruth_docs, relevantDocs_dict, query_dict):
-    # ROCCHIO FORMULA QUERY REFINEMENT
-    # Set use_rocchio to False if not using query refinement
+    '''
+    ROCCHIO FORMULA QUERY REFINEMENT
+    Set use_rocchio to False if not using query refinement
+    '''
     centroid_dict = {}
     num_groundtruth_doc = len(query_groundtruth_docs)
 
@@ -164,10 +162,10 @@ def rocchio_algorithm(rocchio_config, query_groundtruth_docs, relevantDocs_dict,
 
 
 def run_wordnet(query_dict, original_query, wordnet_config, stemmer, zone_weights):
-
-    # WORDNET QUERY EXPANSION
-    # Set use_wordNet to False if not using query expansion
-
+    '''
+    WORDNET QUERY EXPANSION
+    Set use_wordNet to False if not using query expansion
+    '''
     limit = wordnet_config['word_limit']
     num_terms = len(original_query)
     partition = ([limit // num_terms + (1 if x < limit %
@@ -186,7 +184,7 @@ def run_wordnet(query_dict, original_query, wordnet_config, stemmer, zone_weight
                 expanded_query.append(new_term)
                 expanded_count += 1
         total_count += expanded_count
-    # Expanded_query = ['term1','term2','term3' ...]
+
     for t in expanded_query:
         if ' ' in t:  # Checks if t is a phrase
             split = t.split(' ')
@@ -205,6 +203,9 @@ def run_wordnet(query_dict, original_query, wordnet_config, stemmer, zone_weight
 
 
 def process_zones(query_dict, zone_weights):
+    '''
+    Apply zone_weights to each query's tf-idf weight
+    '''
     for k in query_dict.keys():
         zone = k.split('_')[-1]
         if zone == 'posted':
@@ -348,7 +349,7 @@ def process_documents(query_dictionary, sorted_index_dict, input_postings):
 def process_scores(query_dictionary, document_dictionary, docLengths_dict):
     '''
     Computes the cosine-normalized query-document score for all terms for each document.
-    Returns a list of the top 10 most relevant documents based on the query-document score. 
+    Returns a list of relevant documents in descending order based on the query-document score. 
     '''
 
     # Returns empty result if query dictionary is empty
@@ -369,7 +370,7 @@ def process_scores(query_dictionary, document_dictionary, docLengths_dict):
         docScore = docScore/normalize_doc
         result.append((docID, docScore))
 
-    # Return results in descending order without top K-threshold
+    # Return results in descending order
     return sorted(result, key=lambda x: x[1], reverse=True)
 
 
