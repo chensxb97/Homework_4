@@ -31,7 +31,15 @@ def run_search(dict_file, postings_file, queries_file, results_file):
     # Configuration Parameter Settings
     global_config = {
         # Weights assigned to term in each zone
-        'zones': {'title': 0.4, 'content': 0.4, 'date_posted': 0.1, 'court': 0.1},
+        'zones': {
+            "use_zones": True,
+            "weights": {
+                'title': 0.4,
+                'content': 0.4,
+                'date_posted': 0.1,
+                'court': 0.1
+            }
+        },
 
         # Rocchio Query Refinement Configuration Settings
         'rocchio': {
@@ -190,9 +198,21 @@ def run_wordnet(query_dict, original_query, wordnet_config, stemmer, zone_weight
         for z in zone_weights.keys():
             t_z = t + '_{}'.format(z)  # Transform 'term' to 'term_zone'
             if t_z in query_dict.keys():  # Populate query_dict
-                query_dict[t_z] += zone_weights[z]
+                query_dict[t_z] += 1
             else:
-                query_dict[t_z] = zone_weights[z]
+                query_dict[t_z] = 1
+    return query_dict
+
+
+def process_zones(query_dict, zone_weights):
+    for k in query_dict.keys():
+        zone = k.split('_')[-1]
+        if zone == 'posted':
+            zone = 'date_posted'
+        zone_weight = zone_weights[zone]
+        score = query_dict[k]
+        new_score = score * zone_weight
+        query_dict[k] = new_score
     return query_dict
 
 
@@ -204,7 +224,8 @@ def process_query(input_query, sorted_index_dict, collection_size, stemmer, glob
     '''
     query_dict = {}
     original_query = []
-    zone_weights = global_config['zones']
+    zone_config = global_config['zones']
+    zone_weights = zone_config['weights']
     rocchio_config = global_config['rocchio']
     wordnet_config = global_config['wordnet']
 
@@ -229,9 +250,9 @@ def process_query(input_query, sorted_index_dict, collection_size, stemmer, glob
         for z in zone_weights.keys():
             t_z = t + '_{}'.format(z)  # Transform 'term' to 'term_zone'
             if t_z in query_dict.keys():  # Populate query_dict
-                query_dict[t_z] += zone_weights[z]
+                query_dict[t_z] += 1
             else:
-                query_dict[t_z] = zone_weights[z]
+                query_dict[t_z] = 1
 
     print('first one', query_dict)
     print('length', len(query_dict))
@@ -268,6 +289,13 @@ def process_query(input_query, sorted_index_dict, collection_size, stemmer, glob
                                        relevantDocs_dict, query_dict)
 
     print('after wordnet and rocchio', query_dict)
+    print('length', len(query_dict))
+
+    # ZONE WEIGHTING
+    if zone_config['use_zones']:
+        process_zones(query_dict, zone_weights)
+
+    print('after wordnet and rocchio and zone weighting', query_dict)
     print('length', len(query_dict))
 
     return query_dict
