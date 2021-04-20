@@ -49,14 +49,15 @@ def build_index(in_dir, out_dict, out_postings):
     # Load dataset
     df_zf = ZipFile(in_dir)  # Reading from zipped file
     df = pd.read_csv(df_zf.open('dataset.csv'))
-    # consider free text from all zones except doc_id
-    zones = (df.columns).drop('document_id')
 
     # Sort the dataframe by doc_id in ascending order
     df["document_id"] = pd.to_numeric(df['document_id'])
     df = df.sort_values(by=['document_id'])
     df = df.drop('date_posted', axis=1)
     df = df.drop('court', axis=1)
+
+    # consider text from zones title and content, no doc_id, date_posted and court
+    zones = (df.columns).drop('document_id')
 
     # Word processing and tokenisation for each document
     stop_words = stopwords.words('english')  # English stopword collection
