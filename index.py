@@ -16,6 +16,8 @@ from os import listdir
 from os.path import join, isfile
 from nltk.stem.porter import PorterStemmer
 from nltk.util import ngrams
+from nltk.corpus import stopwords
+from collections import Counter
 
 # usage
 # python index.py -i 'dataset.zip' -d dictionary.txt -p postings.txt
@@ -53,6 +55,9 @@ def build_index(in_dir, out_dict, out_postings):
     df = df.sort_values(by=['document_id'])
 
     # Word processing and tokenisation for each document
+    stop_words = stopwords.words('english') # English stopword collection
+    stopwords_dict = Counter(stop_words) # Store stopword in dictionary for faster access O(1)
+
     # For each document, we iterate through its zones and populate postings_dict and index_dict
     n = len(df.index)
     for i in range(n):
@@ -73,8 +78,9 @@ def build_index(in_dir, out_dict, out_postings):
                 for c in sentence:
                     if c not in list_punc:
                         clean_text += c # Remove punctuation
-                stemmed_words = [stemmer.stem(word) for word in nltk.word_tokenize(
-                    clean_text)]  # Stem words within the sentence
+                clean_text = nltk.word_tokenize(clean_text)
+                clean_text_no_sw = ' '.join([word for word in clean_text if word not in stopwords_dict]) # Remove stopwords
+                stemmed_words = [stemmer.stem(word) for word in clean_text_no_sw]  # Stem words within the sentence
                 sentence = ' '.join(stemmed_words)
                 for i in range(1, 4): # Generate unigrams, bigrams and trigrams
                     gramList = []
