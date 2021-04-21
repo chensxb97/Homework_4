@@ -149,7 +149,6 @@ def build_index(in_dir, out_dict, out_postings):
 
     # Sort postings_dict
     sorted_postings_dict_array = sorted(postings_dict.items())
-    print(sorted_index_dict)
 
     # Output postings file
     postings_out = open(out_postings, 'w')
@@ -166,7 +165,7 @@ def build_index(in_dir, out_dict, out_postings):
         sorted_index_dict[term] = (docFrequency, char_offset, strLength)
         char_offset += strLength
     postings_out.close()
-    # Final dictionary is now {term : [termID,docFrequency,charOffSet,strLength]}
+    # Final dictionary is now {term : [docFrequency,charOffSet,strLength]}
 
     print('Postings Done!')
     
@@ -181,7 +180,7 @@ def build_index(in_dir, out_dict, out_postings):
     #             d_tf_wt = 1 + math.log10(termFrequency)
 
     #             # Calculate idf
-    #             docFrequency = sorted_index_dict[term][1]
+    #             docFrequency = sorted_index_dict[term][0]
     #             d_idf = math.log10(collection_size/docFrequency)
 
     #             # tf-idf
@@ -206,15 +205,6 @@ def build_index(in_dir, out_dict, out_postings):
     pickle.dump([sorted_index_dict, docLengths_dict, relevantDocs_dict,
                  collection_size], open(out_dict, "wb"))
     print('Indexing done!')
-
-
-def get_ngrams(text, n):
-    '''
-    Returns a list of n-grams from an input string
-    '''
-    n_grams = ngrams(nltk.word_tokenize(text), n)
-    return ['&'.join(grams) for grams in n_grams]
-
 
 def create_postings(term_dictionary):
     '''
