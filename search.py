@@ -33,9 +33,7 @@ def run_search(dict_file, postings_file, queries_file, results_file):
             "use_zones": True,
             "weights": {
                 'title': 0.4,
-                'content': 0.4,
-                'date_posted': 0.1,
-                'court': 0.1
+                'content': 0.4
             }
         },
 
@@ -49,7 +47,7 @@ def run_search(dict_file, postings_file, queries_file, results_file):
         # Wordnet Query Expansion Configuration Settings
         'wordnet': {
             "use_wordnet": True,
-            "word_limit": 20,
+            "word_limit": 10,
             "weight": 0.1
         }
     }
@@ -77,20 +75,20 @@ def run_search(dict_file, postings_file, queries_file, results_file):
     queries = []
     queries_groundtruth_docs_list = []
 
-    # for i in range(1, len(q_zf.namelist())+1):
-    #     q_file = io.TextIOWrapper(
-    #         q_zf.open("q{}.txt".format(i)), encoding="utf-8")
-    #     query = (q_file.readline()).strip()
-    #     queries.append(query)
+    for i in range(1, len(q_zf.namelist())+1):
+        q_file = io.TextIOWrapper(
+            q_zf.open("q{}.txt".format(i)), encoding="utf-8")
+        query = (q_file.readline()).strip()
+        queries.append(query)
 
-    #     query_groundtruth_docs = q_file.readlines()
-    #     query_groundtruth_docs = [x.strip() for x in query_groundtruth_docs]
-    #     queries_groundtruth_docs_list.append(query_groundtruth_docs)
+        query_groundtruth_docs = q_file.readlines()
+        query_groundtruth_docs = [x.strip() for x in query_groundtruth_docs]
+        queries_groundtruth_docs_list.append(query_groundtruth_docs)
 
-    queries = ['government problem', 'illegal racing bet',
-               'chinese magistrate petitioners']
-    queries_groundtruth_docs_list = [
-        [246403, 246427], [246403, 246427], [246403, 246427]]
+    # queries = ['government problem', 'illegal racing bet',
+    #            'chinese magistrate petitioners']
+    # queries_groundtruth_docs_list = [
+    #     [246403, 246427], [246403, 246427], [246403, 246427]]
 
     # Process each query and store the results in a list
     query_results = []
@@ -190,15 +188,21 @@ def run_wordnet(query_dict, original_query, wordnet_config, stemmer, zone_weight
             split = t.split(' ')
             stemmed = [stemmer.stem(word)
                        for word in split]  # stem individual terms
-            t = '&'.join(split)  # Stemmed phrase with & as the delimiter
+            for t in stemmed:
+                for z in zone_weights.keys():
+                    t_z = t + '_{}'.format(z)  # Transform 'term' to 'term_zone'
+                    if t_z in query_dict.keys():  # Populate query_dict
+                        query_dict[t_z] += 1
+                    else:
+                        query_dict[t_z] = 1
         else:
             t = stemmer.stem(t)  # Stem lone term
-        for z in zone_weights.keys():
-            t_z = t + '_{}'.format(z)  # Transform 'term' to 'term_zone'
-            if t_z in query_dict.keys():  # Populate query_dict
-                query_dict[t_z] += 1
-            else:
-                query_dict[t_z] = 1
+            for z in zone_weights.keys():
+                t_z = t + '_{}'.format(z)  # Transform 'term' to 'term_zone'
+                if t_z in query_dict.keys():  # Populate query_dict
+                    query_dict[t_z] += 1
+                else:
+                    query_dict[t_z] = 1
     return query_dict
 
 
@@ -245,15 +249,21 @@ def process_query(input_query, sorted_index_dict, collection_size, stemmer, glob
             split = t.split(' ')
             stemmed = [stemmer.stem(word)
                        for word in split]  # stem individual terms
-            t = '&'.join(split)  # Stemmed phrase with & as the delimiter
+            for t in stemmed:
+                for z in zone_weights.keys():
+                    t_z = t + '_{}'.format(z)  # Transform 'term' to 'term_zone'
+                    if t_z in query_dict.keys():  # Populate query_dict
+                        query_dict[t_z] += 1
+                    else:
+                        query_dict[t_z] = 1
         else:
             t = stemmer.stem(t)  # Stem lone term
-        for z in zone_weights.keys():
-            t_z = t + '_{}'.format(z)  # Transform 'term' to 'term_zone'
-            if t_z in query_dict.keys():  # Populate query_dict
-                query_dict[t_z] += 1
-            else:
-                query_dict[t_z] = 1
+            for z in zone_weights.keys():
+                t_z = t + '_{}'.format(z)  # Transform 'term' to 'term_zone'
+                if t_z in query_dict.keys():  # Populate query_dict
+                    query_dict[t_z] += 1
+                else:
+                    query_dict[t_z] = 1
 
     print('first one', query_dict)
     print('length', len(query_dict))
