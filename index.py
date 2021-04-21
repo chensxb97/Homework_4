@@ -40,9 +40,6 @@ def build_index(in_dir, out_dict, out_postings):
     # Initialisation
     punc = list(string.punctuation)
     punc.append("'")  # Include apostrophe
-    only_alpha = True  # Flag for accepting only alphabets in index
-    no_zones = True # Flag for using zones
-
     punc_dict = Counter(punc)  # Punctuation dictionary for faster access O(1)
     stop_words = stopwords.words('english')
     # Stopword dictionary for faster access O(1)
@@ -83,61 +80,56 @@ def build_index(in_dir, out_dict, out_postings):
 
             raw_text = record[zone]
             raw_text = raw_text.lower()
-            for sentence in nltk.sent_tokenize(raw_text):
-                # Remove punctuation
-                clean_text = ''.join(
-                    [word for word in sentence if word not in punc_dict])
-                clean_text_no_sw = ' '.join([word for word in nltk.word_tokenize(
-                    clean_text) if word not in stopwords_dict])  # Remove stopwords
-                if only_alpha:
-                    stemmed = ' '.join([stemmer.stem(word) for word in nltk.word_tokenize(
-                        clean_text_no_sw) if word.isalpha()])  # Stem words within the sentence
-                else:
-                    stemmed = ' '.join(
-                        [stemmer.stem(word) for word in nltk.word_tokenize(clean_text_no_sw)])
-                for i in range(1, 4):  # Generate unigrams, bigrams and trigrams
-                    gramList = []
-                    gramList = get_ngrams(stemmed, i)
-                    for gram in gramList:
-                        termList.append(gram)
-                        termSet.add(gram)
+            for sentence in nltk.sent_tokenize(raw_text): # Sentence
+                for word in nltk.word_tokenize(sentence): # Split the sentence
+                    if word.isalpha() and word not in stopwords_dict and word not in punc_dict:
+                        termList.append(word)
+                        termSet.add(word) 
+                
+                # clean_text = ''.join(
+                    # [word for word in sentence if word not in punc_dict])
+                # clean_text_no_sw = ' '.join([word for word in nltk.word_tokenize(
+                    # clean_text) if word not in stopwords_dict])  # Remove stopwords
+                # if only_alpha:
+                    # stemmed = ' '.join([stemmer.stem(word) for word in nltk.word_tokenize(
+                        # clean_text_no_sw) if word.isalpha()])  # Stem words within the sentence
+                # else:
+                    # stemmed = ' '.join(
+                        # [stemmer.stem(word) for word in nltk.word_tokenize(clean_text_no_sw)]
+                # for i in range(1, 2):  # Generate unigrams - No bigrams and trigrams due to lack of memory
+                    # gramList = []
+                    # gramList = get_ngrams(stemmed, i)
+                    # for gram in gramList:
+                        # termList.append(gram)
+                        # termSet.add(gram)
 
             # Populate postings_dict
             # postings_dict = {token_zone: {docId: termFrequency}}
             for t in termList:
-                # Terms have to be categorised by their zones
-                if no_zones:
-                    t_zone = t
-                else:
-                    t_zone = t + '_{}'.format(zone)
-                if t_zone in postings_dict.keys():
-                    if docId in postings_dict[t_zone].keys():
-                        termFreq = postings_dict[t_zone][docId]
+                if t in postings_dict.keys():
+                    if docId in postings_dict[t].keys():
+                        termFreq = postings_dict[t][docId]
                         termFreq += 1
-                        postings_dict[t_zone][docId] = termFreq
+                        postings_dict[t][docId] = termFreq
                     else:
-                        postings_dict[t_zone][docId] = 1
+                        postings_dict[t][docId] = 1
                 else:
-                    postings_dict[t_zone] = {}
-                    postings_dict[t_zone][docId] = 1
+                    postings_dict[t] = {}
+                    postings_dict[t][docId] = 1
 
             # Populate index_dict and docLengths_dict
             # index_dict = {token_zone: docFrequency}
             # docLengths_dict = {docId: docLength}
             for t in termSet:
-                if no_zones:
-                    t_zone = t
-                else:
-                    t_zone = t + '_{}'.format(zone)
-                if t_zone in index_dict.keys():
-                    docFreq = index_dict[t_zone]
+                if t in index_dict.keys():
+                    docFreq = index_dict[t]
                     docFreq += 1
-                    index_dict[t_zone] = docFreq
+                    index_dict[t] = docFreq
                 else:
-                    index_dict[t_zone] = 1
+                    index_dict[t] = 1
                 # docLength of a document is computed for tf (document) cosine normalization
                 docLength += math.pow(1 +
-                                      math.log10(postings_dict[t_zone][docId]), 2)
+                                      math.log10(postings_dict[t][docId]), 2)
 
         docLength = math.sqrt(docLength)
         docLengths_dict[docId] = docLength
@@ -149,11 +141,9 @@ def build_index(in_dir, out_dict, out_postings):
     # Sort index_dict
     sorted_index_dict_array = sorted(index_dict.items())
     sorted_index_dict = {}
-    for termID, (term, value) in enumerate(sorted_index_dict_array):
-        # Addition of 1 ensures that termIDs starts from 1
-        termID += 1
+    for (term, value) in enumerate(sorted_index_dict_array): 
         docFrequency = value
-        sorted_index_dict[term] = [termID, docFrequency]
+        sorted_index_dict[term] = [docFrequency]
     # Dictionary is now {term : [termID, docFrequency]}
 
     # Sort postings_dict
