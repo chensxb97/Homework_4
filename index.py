@@ -67,7 +67,7 @@ def build_index(in_dir, out_dict, out_postings):
 
     # For each document, we iterate through its zones and populate postings_dict and index_dict
     n = len(df.index)
-    for i in range(2):
+    for i in range(n):
         record = df.iloc[i]
         docId = record['document_id']
         print('Starting on document: {}'.format(docId))  # Log docId
