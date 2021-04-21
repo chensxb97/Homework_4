@@ -40,8 +40,6 @@ def build_index(in_dir, out_dict, out_postings):
     # Initialisation
     punc = list(string.punctuation)
     punc.append("'")  # Include apostrophe
-    only_alpha = True  # Flag for accepting only alphabets in index
-
     punc_dict = Counter(punc)  # Punctuation dictionary for faster access O(1)
     stop_words = stopwords.words('english')
     # Stopword dictionary for faster access O(1)
@@ -57,8 +55,8 @@ def build_index(in_dir, out_dict, out_postings):
     df_zf = ZipFile(in_dir)  # Reading from zipped file
     df = pd.read_csv(df_zf.open('dataset.csv'))
     # consider free text from all zones except doc_id
-    df = df.drop('date_posted', axis=1)
-    df = df.drop('court', axis=1)
+    # df = df.drop('date_posted', axis=1)
+    # df = df.drop('court', axis=1)
     zones = (df.drop(columns=['document_id'])).columns
 
     # Sort the dataframe by doc_id in ascending order
@@ -69,7 +67,7 @@ def build_index(in_dir, out_dict, out_postings):
 
     # For each document, we iterate through its zones and populate postings_dict and index_dict
     n = len(df.index)
-    for i in range(n):
+    for i in range(10):
         record = df.iloc[i]
         docId = record['document_id']
         print('Starting on document: {}'.format(docId))  # Log docId
@@ -159,6 +157,7 @@ def build_index(in_dir, out_dict, out_postings):
     # Sort postings_dict
     sorted_postings_dict_array = sorted(postings_dict.items())
     print('Dictionaries sorted')
+    print(sorted_index_dict)
 
     # Output postings file
     postings_out = open(out_postings, 'w')
@@ -218,12 +217,12 @@ def build_index(in_dir, out_dict, out_postings):
     print('Indexing done!')
 
 
-def get_ngrams(text, n):
-    '''
-    Returns a list of n-grams from an input string
-    '''
-    n_grams = ngrams(nltk.word_tokenize(text), n)
-    return ['&'.join(grams) for grams in n_grams]
+# def get_ngrams(text, n):
+#     '''
+#     Returns a list of n-grams from an input string
+#     '''
+#     n_grams = ngrams(nltk.word_tokenize(text), n)
+#     return ['&'.join(grams) for grams in n_grams]
 
 
 def create_postings(term_dictionary):
