@@ -33,7 +33,9 @@ def run_search(dict_file, postings_file, queries_file, results_file):
             "use_zones": True,
             "weights": {
                 'title': 0.4,
-                'content': 0.4
+                'content': 0.4,
+                'date_posted':0.1,
+                'court': 0.1
             }
         },
 
@@ -71,18 +73,16 @@ def run_search(dict_file, postings_file, queries_file, results_file):
     postings = open(postings_file, 'r')
 
     # Open queries zipped file
-    q_zf = ZipFile(queries_file)
+    # q_zf = ZipFile(queries_file)
     queries = []
     queries_groundtruth_docs_list = []
 
-    for i in range(1, len(q_zf.namelist())+1):
-        q_file = io.TextIOWrapper(
-            q_zf.open("q{}.txt".format(i)), encoding="utf-8")
-        query = (q_file.readline()).strip()
+    with open(queries_file,'r') as f:
+        query = (f.readline()).strip()
         queries.append(query)
 
-        query_groundtruth_docs = q_file.readlines()
-        query_groundtruth_docs = [x.strip() for x in query_groundtruth_docs]
+        query_groundtruth_docs = f.readlines()
+        query_groundtruth_docs = [int(x.strip()) for x in query_groundtruth_docs]
         queries_groundtruth_docs_list.append(query_groundtruth_docs)
 
     # queries = ['government problem', 'illegal racing bet',
@@ -134,7 +134,6 @@ def rocchio_algorithm(rocchio_config, query_groundtruth_docs, relevantDocs_dict,
     num_groundtruth_doc = len(query_groundtruth_docs)
 
     for doc_id in query_groundtruth_docs:
-
         doc_vector = relevantDocs_dict[doc_id]
 
         for (term, tf_idf) in doc_vector:  # Iterate term weights in the relevant document vector
