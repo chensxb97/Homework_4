@@ -77,20 +77,20 @@ def run_search(dict_file, postings_file, queries_file, results_file):
     queries = []
     queries_groundtruth_docs_list = []
 
-    # for i in range(1, len(q_zf.namelist())+1):
-    #     q_file = io.TextIOWrapper(
-    #         q_zf.open("q{}.txt".format(i)), encoding="utf-8")
-    #     query = (q_file.readline()).strip()
-    #     queries.append(query)
+    for i in range(1, len(q_zf.namelist())+1):
+        q_file = io.TextIOWrapper(
+            q_zf.open("q{}.txt".format(i)), encoding="utf-8")
+        query = (q_file.readline()).strip()
+        queries.append(query)
 
-    #     query_groundtruth_docs = q_file.readlines()
-    #     query_groundtruth_docs = [x.strip() for x in query_groundtruth_docs]
-    #     queries_groundtruth_docs_list.append(query_groundtruth_docs)
+        query_groundtruth_docs = q_file.readlines()
+        query_groundtruth_docs = [x.strip() for x in query_groundtruth_docs]
+        queries_groundtruth_docs_list.append(query_groundtruth_docs)
 
-    queries = ['government problem', 'illegal racing bet',
-               'chinese magistrate petitioners']
-    queries_groundtruth_docs_list = [
-        [246403, 246427], [246403, 246427], [246403, 246427]]
+#     queries = ['government problem', 'illegal racing bet',
+#                'chinese magistrate petitioners']
+#     queries_groundtruth_docs_list = [
+#         [246403, 246427], [246403, 246427], [246403, 246427]]
 
     # Process each query and store the results in a list
     query_results = []
