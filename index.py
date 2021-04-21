@@ -102,7 +102,7 @@ def build_index(in_dir, out_dict, out_postings):
     time_taken = end_time - start_time
     print("time_taken_after_merge:", time_taken)
     print("postings_dict", len(postings_dict))
-    return 
+    # return 
 
 
     # Sort index_dict
@@ -150,7 +150,7 @@ def build_index(in_dir, out_dict, out_postings):
 
                 # Calculate idf
                 docFrequency = sorted_index_dict[term][1]
-                d_idf = math.log10(collection_size/docFrequency)
+                d_idf = math.log10(n/docFrequency)
 
                 # tf-idf
                 d_wt = d_tf_wt * d_idf
