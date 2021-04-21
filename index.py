@@ -20,7 +20,7 @@ from nltk.corpus import stopwords
 from collections import Counter
 
 # usage
-# python index.py -i dataset.zip -d dictionary.txt -p postings.txt
+# python3 index.py -i 'dataset.zip' -d dictionary.txt -p postings.txt
 
 
 def usage():
@@ -83,8 +83,9 @@ def build_index(in_dir, out_dict, out_postings):
             for sentence in nltk.sent_tokenize(raw_text): # Sentence
                 for word in nltk.word_tokenize(sentence): # Split the sentence
                     if word.isalpha() and word not in stopwords_dict and word not in punc_dict:
-                        termList.append(word)
-                        termSet.add(word) 
+                        stemmed = stemmer.stem(word)
+                        termList.append(stemmed)
+                        termSet.add(stemmed) 
                 
                 # clean_text = ''.join(
                     # [word for word in sentence if word not in punc_dict])
@@ -141,13 +142,14 @@ def build_index(in_dir, out_dict, out_postings):
     # Sort index_dict
     sorted_index_dict_array = sorted(index_dict.items())
     sorted_index_dict = {}
-    for (term, value) in enumerate(sorted_index_dict_array): 
+    for termID, (term, value) in enumerate(sorted_index_dict_array):
         docFrequency = value
-        sorted_index_dict[term] = [docFrequency]
-    # Dictionary is now {term : [docFrequency]}
+        sorted_index_dict[term] = docFrequency
+    # Dictionary is now {term : docFrequency}
 
     # Sort postings_dict
     sorted_postings_dict_array = sorted(postings_dict.items())
+    print(sorted_index_dict)
 
     # Output postings file
     postings_out = open(out_postings, 'w')
@@ -164,39 +166,39 @@ def build_index(in_dir, out_dict, out_postings):
         sorted_index_dict[term] = (docFrequency, char_offset, strLength)
         char_offset += strLength
     postings_out.close()
-    # Final dictionary is now {term : [docFrequency,charOffSet,strLength]}
+    # Final dictionary is now {term : [termID,docFrequency,charOffSet,strLength]}
 
     print('Postings Done!')
     
-    # Obtain relevant document vectors for pseudo-relevance feedback
-    for docId, docLength in docLengths_dict.items():
-        # Temporary dictionary to store all tf-idf weights in relevant documents before sorting
-        temp_relevantDoc_dict = {}
-        for term in postings_dict.keys():
-            if docId in postings_dict[term]:
-                # Calculate tf-wt
-                termFrequency = postings_dict[term][docId]
-                d_tf_wt = 1 + math.log10(termFrequency)
+    # # Obtain relevant document vectors for pseudo-relevance feedback
+    # for docId, docLength in docLengths_dict.items():
+    #     # Temporary dictionary to store all tf-idf weights in relevant documents before sorting
+    #     temp_relevantDoc_dict = {}
+    #     for term in postings_dict.keys():
+    #         if docId in postings_dict[term]:
+    #             # Calculate tf-wt
+    #             termFrequency = postings_dict[term][docId]
+    #             d_tf_wt = 1 + math.log10(termFrequency)
 
-                # Calculate idf
-                docFrequency = sorted_index_dict[term][0]
-                d_idf = math.log10(collection_size/docFrequency)
+    #             # Calculate idf
+    #             docFrequency = sorted_index_dict[term][1]
+    #             d_idf = math.log10(collection_size/docFrequency)
 
-                # tf-idf
-                d_wt = d_tf_wt * d_idf
+    #             # tf-idf
+    #             d_wt = d_tf_wt * d_idf
 
-                # Perform cosine normalization
-                d_normalize_wt = d_wt/docLength
+    #             # Perform cosine normalization
+    #             d_normalize_wt = d_wt/docLength
 
-                temp_relevantDoc_dict[term] = d_normalize_wt
+    #             temp_relevantDoc_dict[term] = d_normalize_wt
 
-        # Sort and obtain top-10 tf-idf weights in descending order
-        # sorted_relevantDoc = {term1: tf-idf1, term2: tf-idf2 ...}
-        sorted_relevantDoc = sorted(
-            temp_relevantDoc_dict.items(), key=lambda x: x[1], reverse=True)[:10]
+    #     # Sort and obtain top-10 tf-idf weights in descending order
+    #     # sorted_relevantDoc = {term1: tf-idf1, term2: tf-idf2 ...}
+    #     sorted_relevantDoc = sorted(
+    #         temp_relevantDoc_dict.items(), key=lambda x: x[1], reverse=True)[:10]
 
-        # Store relevant document vector
-        relevantDocs_dict[docId] = sorted_relevantDoc
+    #     # Store relevant document vector
+    #     relevantDocs_dict[docId] = sorted_relevantDoc
 
     print('Pickling...')
 
