@@ -340,8 +340,8 @@ def process_documents(query_dictionary, sorted_index_dict, input_postings):
     # Extract and process posting lists from main index dictionary
     for word in query_dictionary.keys():
         if word in sorted_index_dict.keys():
-            charOffset = sorted_index_dict[word][2]
-            strLength = sorted_index_dict[word][3]
+            charOffset = sorted_index_dict[word][1]
+            strLength = sorted_index_dict[word][2]
             input_postings.seek(charOffset, 0)
             posting_str = (input_postings.read(strLength))
             posting_array = posting_str.split(',')
