@@ -19,8 +19,41 @@ from nltk.util import ngrams
 from nltk.corpus import stopwords
 from collections import Counter
 
+import time
+from multiprocessing import Pool
+import os 
+
+
 # usage
 # python3 index.py -i 'dataset.zip' -d dictionary.txt -p postings.txt
+
+
+
+# Initialisation
+punc = list(string.punctuation)
+punc.append("'")  # Include apostrophe
+only_alpha = True  # Flag for accepting only alphabets in index
+
+punc_dict = Counter(punc)  # Punctuation dictionary for faster access O(1)
+stop_words = stopwords.words('english')
+# Stopword dictionary for faster access O(1)
+stopwords_dict = Counter(stop_words)
+stemmer = PorterStemmer()
+
+relevantDocs_dict = {}
+collection_size = 0
+
+# Load dataset
+df_zf = ZipFile("dataset.zip")  # Reading from zipped file
+df = pd.read_csv(df_zf.open('dataset.csv'))
+# consider free text from all zones except doc_id
+df = df.drop('date_posted', axis=1)
+df = df.drop('court', axis=1)
+zones = (df.drop(columns=['document_id'])).columns
+
+# Sort the dataframe by doc_id in ascending order
+df["document_id"] = pd.to_numeric(df['document_id'])
+df = df.sort_values(by=['document_id'])
 
 
 def usage():
@@ -37,107 +70,40 @@ def build_index(in_dir, out_dict, out_postings):
     # This is an empty method
     # Pls implement your code in below
 
-    # Initialisation
-    punc = list(string.punctuation)
-    punc.append("'")  # Include apostrophe
-    only_alpha = True  # Flag for accepting only alphabets in index
-
-    punc_dict = Counter(punc)  # Punctuation dictionary for faster access O(1)
-    stop_words = stopwords.words('english')
-    # Stopword dictionary for faster access O(1)
-    stopwords_dict = Counter(stop_words)
-    stemmer = PorterStemmer()
     index_dict = {}
     postings_dict = {}
-    relevantDocs_dict = {}
     docLengths_dict = {}
-    collection_size = 0
-
-    # Load dataset
-    df_zf = ZipFile(in_dir)  # Reading from zipped file
-    df = pd.read_csv(df_zf.open('dataset.csv'))
-    # consider free text from all zones except doc_id
-    df = df.drop('date_posted', axis=1)
-    df = df.drop('court', axis=1)
-    zones = (df.drop(columns=['document_id'])).columns
-
-    # Sort the dataframe by doc_id in ascending order
-    df["document_id"] = pd.to_numeric(df['document_id'])
-    df = df.sort_values(by=['document_id'])
 
     # Word processing and tokenisation for each document
 
     # For each document, we iterate through its zones and populate postings_dict and index_dict
     n = len(df.index)
-    for i in range(n):
-        record = df.iloc[i]
-        docId = record['document_id']
-        print('Starting on document: {}'.format(docId))  # Log docId
-        docLength = 0
-        for zone in zones:
-            # Store all observed terms in a list, used to track termFrequency
-            termList = []
-            # Set data structure is used to store the unique words only
-            termSet = set()
+    # n = 300
 
-            raw_text = record[zone]
-            raw_text = raw_text.lower()
-            for sentence in nltk.sent_tokenize(raw_text):
-                # Remove punctuation
-                clean_text = ''.join(
-                    [word for word in sentence if word not in punc_dict])
-                clean_text_no_sw = ' '.join([word for word in nltk.word_tokenize(
-                    clean_text) if word not in stopwords_dict])  # Remove stopwords
-                if only_alpha:
-                    stemmed = ' '.join([stemmer.stem(word) for word in nltk.word_tokenize(
-                        clean_text_no_sw) if word.isalpha()])  # Stem words within the sentence
-                else:
-                    stemmed = ' '.join(
-                        [stemmer.stem(word) for word in nltk.word_tokenize(clean_text_no_sw)])
-                for i in range(1, 4):  # Generate unigrams, bigrams and trigrams
-                    gramList = []
-                    gramList = get_ngrams(stemmed, i)
-                    for gram in gramList:
-                        termList.append(gram)
-                        termSet.add(gram)
+    start_time = time.time()
 
-            # Populate postings_dict
-            # postings_dict = {token_zone: {docId: termFrequency}}
-            for t in termList:
-                # Terms have to be categorised by their zones
-                t_zone = t + '_{}'.format(zone)
-                if t_zone in postings_dict.keys():
-                    if docId in postings_dict[t_zone].keys():
-                        termFreq = postings_dict[t_zone][docId]
-                        termFreq += 1
-                        postings_dict[t_zone][docId] = termFreq
-                    else:
-                        postings_dict[t_zone][docId] = 1
-                else:
-                    postings_dict[t_zone] = {}
-                    postings_dict[t_zone][docId] = 1
 
-            # Populate index_dict and docLengths_dict
-            # index_dict = {token_zone: docFrequency}
-            # docLengths_dict = {docId: docLength}
-            for t in termSet:
-                t_zone = t + '_{}'.format(zone)
-                if t_zone in index_dict.keys():
-                    docFreq = index_dict[t_zone]
-                    docFreq += 1
-                    index_dict[t_zone] = docFreq
-                else:
-                    index_dict[t_zone] = 1
-                # docLength of a document is computed for tf (document) cosine normalization
-                docLength += math.pow(1 +
-                                      math.log10(postings_dict[t_zone][docId]), 2)
+    pool = Pool(os.cpu_count())       
+    
+    results = pool.map(parallel_index, range(n))  
 
-        docLength = math.sqrt(docLength)
-        docLengths_dict[docId] = docLength
 
-        # Increment collection size
-        collection_size += 1
-        print('Indexed: {}/{}'.format(collection_size, n))  # Log indexing
+    end_time = time.time()
+    time_taken = end_time - start_time
+    print("time_taken_before_merge:", time_taken)
+
+
+    for (postings_partial, index_partial, docLengths_partial) in results:
+        postings_dict.update(postings_partial)
+        index_dict.update(index_partial)
+        docLengths_dict.update(docLengths_partial)
+
+    end_time = time.time()
+    time_taken = end_time - start_time
+    print("time_taken_after_merge:", time_taken)
+    print("postings_dict", len(postings_dict))
+    return 
+
 
     # Sort index_dict
     sorted_index_dict_array = sorted(index_dict.items())
@@ -208,6 +174,86 @@ def build_index(in_dir, out_dict, out_postings):
     pickle.dump([sorted_index_dict, docLengths_dict, relevantDocs_dict,
                  collection_size], open(out_dict, "wb"))
     print('Indexing done!')
+
+
+def parallel_index(i):
+    index_dict = {}
+    postings_dict = {}
+    docLengths_dict = {}
+
+    global collection_size
+
+    record = df.iloc[i]
+    docId = record['document_id']
+    print('Starting on document: {}'.format(docId))  # Log docId
+    docLength = 0
+    for zone in zones:
+        # Store all observed terms in a list, used to track termFrequency
+        termList = []
+        # Set data structure is used to store the unique words only
+        termSet = set()
+
+        raw_text = record[zone]
+        raw_text = raw_text.lower()
+        for sentence in nltk.sent_tokenize(raw_text):
+            # Remove punctuation
+            clean_text = ''.join(
+                [word for word in sentence if word not in punc_dict])
+            clean_text_no_sw = ' '.join([word for word in nltk.word_tokenize(
+                clean_text) if word not in stopwords_dict])  # Remove stopwords
+            if only_alpha:
+                stemmed = ' '.join([stemmer.stem(word) for word in nltk.word_tokenize(
+                    clean_text_no_sw) if word.isalpha()])  # Stem words within the sentence
+            else:
+                stemmed = ' '.join(
+                    [stemmer.stem(word) for word in nltk.word_tokenize(clean_text_no_sw)])
+            for i in range(1, 4):  # Generate unigrams, bigrams and trigrams
+                gramList = []
+                gramList = get_ngrams(stemmed, i)
+                for gram in gramList:
+                    termList.append(gram)
+                    termSet.add(gram)
+
+        # Populate postings_dict
+        # postings_dict = {token_zone: {docId: termFrequency}}
+        for t in termList:
+            # Terms have to be categorised by their zones
+            t_zone = t + '_{}'.format(zone)
+            if t_zone in postings_dict.keys():
+                if docId in postings_dict[t_zone].keys():
+                    termFreq = postings_dict[t_zone][docId]
+                    termFreq += 1
+                    postings_dict[t_zone][docId] = termFreq
+                else:
+                    postings_dict[t_zone][docId] = 1
+            else:
+                postings_dict[t_zone] = {}
+                postings_dict[t_zone][docId] = 1
+
+        # Populate index_dict and docLengths_dict
+        # index_dict = {token_zone: docFrequency}
+        # docLengths_dict = {docId: docLength}
+        for t in termSet:
+            t_zone = t + '_{}'.format(zone)
+            if t_zone in index_dict.keys():
+                docFreq = index_dict[t_zone]
+                docFreq += 1
+                index_dict[t_zone] = docFreq
+            else:
+                index_dict[t_zone] = 1
+            # docLength of a document is computed for tf (document) cosine normalization
+            docLength += math.pow(1 +
+                                    math.log10(postings_dict[t_zone][docId]), 2)
+
+    docLength = math.sqrt(docLength)
+    docLengths_dict[docId] = docLength
+
+    # Increment collection size
+    collection_size += 1
+    # print('Indexed: {}/{}'.format(collection_size, n))  # Log 
+    print("Indexed", collection_size)
+    # print("postings_dict", postings_dict)
+    return postings_dict, index_dict, docLengths_dict
 
 
 def get_ngrams(text, n):
