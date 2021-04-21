@@ -83,23 +83,29 @@ def build_index(in_dir, out_dict, out_postings):
             raw_text = record[zone]
             raw_text = raw_text.lower()
             for sentence in nltk.sent_tokenize(raw_text):
-                # Remove punctuation
-                clean_text = ''.join(
-                    [word for word in sentence if word not in punc_dict])
-                clean_text_no_sw = ' '.join([word for word in nltk.word_tokenize(
-                    clean_text) if word not in stopwords_dict])  # Remove stopwords
-                if only_alpha:
-                    stemmed = ' '.join([stemmer.stem(word) for word in nltk.word_tokenize(
-                        clean_text_no_sw) if word.isalpha()])  # Stem words within the sentence
-                else:
-                    stemmed = ' '.join(
-                        [stemmer.stem(word) for word in nltk.word_tokenize(clean_text_no_sw)])
-                for i in range(1, 4):  # Generate unigrams, bigrams and trigrams
-                    gramList = []
-                    gramList = get_ngrams(stemmed, i)
-                    for gram in gramList:
-                        termList.append(gram)
-                        termSet.add(gram)
+                for word in nltk.word_tokenize(sentence): # Split the sentence
+                    if word.isalpha() and word not in stopwords_dict and word not in punc_dict:
+                        stemmed = stemmer.stem(word)
+                        termList.append(stemmed)
+                        termSet.add(stemmed) 
+
+                # # Remove punctuation
+                # clean_text = ''.join(
+                #     [word for word in sentence if word not in punc_dict])
+                # clean_text_no_sw = ' '.join([word for word in nltk.word_tokenize(
+                #     clean_text) if word not in stopwords_dict])  # Remove stopwords
+                # if only_alpha:
+                #     stemmed = ' '.join([stemmer.stem(word) for word in nltk.word_tokenize(
+                #         clean_text_no_sw) if word.isalpha()])  # Stem words within the sentence
+                # else:
+                #     stemmed = ' '.join(
+                #         [stemmer.stem(word) for word in nltk.word_tokenize(clean_text_no_sw)])
+                # for i in range(1, 4):  # Generate unigrams, bigrams and trigrams
+                #     gramList = []
+                #     gramList = get_ngrams(stemmed, i)
+                #     for gram in gramList:
+                #         termList.append(gram)
+                #         termSet.add(gram)
 
             # Populate postings_dict
             # postings_dict = {token_zone: {docId: termFrequency}}
@@ -140,6 +146,7 @@ def build_index(in_dir, out_dict, out_postings):
         print('Indexed: {}/{}'.format(collection_size, n))  # Log indexing
 
     # Sort index_dict
+    print('Sorting dictionaries...')
     sorted_index_dict_array = sorted(index_dict.items())
     sorted_index_dict = {}
     for termID, (term, value) in enumerate(sorted_index_dict_array):
@@ -151,6 +158,7 @@ def build_index(in_dir, out_dict, out_postings):
 
     # Sort postings_dict
     sorted_postings_dict_array = sorted(postings_dict.items())
+    print('Dictionaries sorted')
 
     # Output postings file
     postings_out = open(out_postings, 'w')
