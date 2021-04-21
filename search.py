@@ -30,7 +30,7 @@ def run_search(dict_file, postings_file, queries_file, results_file):
     global_config = {
         # Weights assigned to term in each zone
         'zones': {
-            "use_zones": True,
+            "use_zones": False,
             "weights": {
                 'title': 0.4,
                 'content': 0.4,
@@ -136,9 +136,7 @@ def rocchio_algorithm(rocchio_config, query_groundtruth_docs, relevantDocs_dict,
     num_groundtruth_doc = len(query_groundtruth_docs)
 
     for doc_id in query_groundtruth_docs:
-
         doc_vector = relevantDocs_dict[doc_id]
-
         for (term, tf_idf) in doc_vector:  # Iterate term weights in the relevant document vector
             if term not in centroid_dict:
                 centroid_dict[term] = tf_idf
@@ -161,12 +159,13 @@ def rocchio_algorithm(rocchio_config, query_groundtruth_docs, relevantDocs_dict,
     return query_dict
 
 
-def run_wordnet(query_dict, original_query, wordnet_config, stemmer, zone_weights):
+def run_wordnet(query_dict, original_query, wordnet_config, stemmer, zone_config):
     '''
     WORDNET QUERY EXPANSION
     Set use_wordNet to False if not using query expansion
     '''
     limit = wordnet_config['word_limit']
+    zone_weights = zone_config['weights']
     num_terms = len(original_query)
     partition = ([limit // num_terms + (1 if x < limit %
                                         num_terms else 0) for x in range(num_terms)])
@@ -193,12 +192,20 @@ def run_wordnet(query_dict, original_query, wordnet_config, stemmer, zone_weight
             t = '&'.join(split)  # Stemmed phrase with & as the delimiter
         else:
             t = stemmer.stem(t)  # Stem lone term
-        for z in zone_weights.keys():
-            t_z = t + '_{}'.format(z)  # Transform 'term' to 'term_zone'
-            if t_z in query_dict.keys():  # Populate query_dict
-                query_dict[t_z] += 1
+
+        if zone_config['use_zones']:
+            for z in zone_weights.keys():
+                t_z = t + '_{}'.format(z)  # Transform 'term' to 'term_zone'
+                if t_z in query_dict.keys():  # Populate query_dict
+                    query_dict[t_z] += 1
+                else:
+                    query_dict[t_z] = 1
+        else:
+            if t in query_dict.keys(): # No zone implementation
+                query_dict[t] += 1
             else:
-                query_dict[t_z] = 1
+                query_dict[t] = 1
+
     return query_dict
 
 
@@ -248,12 +255,18 @@ def process_query(input_query, sorted_index_dict, collection_size, stemmer, glob
             t = '&'.join(split)  # Stemmed phrase with & as the delimiter
         else:
             t = stemmer.stem(t)  # Stem lone term
-        for z in zone_weights.keys():
-            t_z = t + '_{}'.format(z)  # Transform 'term' to 'term_zone'
-            if t_z in query_dict.keys():  # Populate query_dict
-                query_dict[t_z] += 1
+        if zone_config['use_zones']:
+            for z in zone_weights.keys():
+                t_z = t + '_{}'.format(z)  # Transform 'term' to 'term_zone'
+                if t_z in query_dict.keys():  # Populate query_dict
+                    query_dict[t_z] += 1
+                else:
+                    query_dict[t_z] = 1
+        else:
+            if t in query_dict.keys():  # No zone implementation
+                query_dict[t] += 1
             else:
-                query_dict[t_z] = 1
+                query_dict[t] = 1
 
     print('first one', query_dict)
     print('length', len(query_dict))
@@ -261,7 +274,7 @@ def process_query(input_query, sorted_index_dict, collection_size, stemmer, glob
     # WORDNET QUERY EXPANSION
     if wordnet_config['use_wordnet']:
         query_dict = run_wordnet(
-            query_dict, original_query, wordnet_config, stemmer, zone_weights)
+            query_dict, original_query, wordnet_config, stemmer, zone_config)
 
     # Calcualte tf-idf-wt for query terms
     for t_z in query_dict.keys():
