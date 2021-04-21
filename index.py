@@ -41,6 +41,7 @@ def build_index(in_dir, out_dict, out_postings):
     punc = list(string.punctuation)
     punc.append("'")  # Include apostrophe
     only_alpha = True  # Flag for accepting only alphabets in index
+    no_zones = True # Flag for using zones
 
     punc_dict = Counter(punc)  # Punctuation dictionary for faster access O(1)
     stop_words = stopwords.words('english')
@@ -59,7 +60,7 @@ def build_index(in_dir, out_dict, out_postings):
     # consider free text from all zones except doc_id
     df = df.drop('date_posted', axis=1)
     df = df.drop('court', axis=1)
-    zones = (df.drop(columns=['document_id'])).columns
+    zones = df.drop('document_id',axis = 1).columns # zones = ['title','content']
 
     # Sort the dataframe by doc_id in ascending order
     df["document_id"] = pd.to_numeric(df['document_id'])
@@ -69,7 +70,7 @@ def build_index(in_dir, out_dict, out_postings):
 
     # For each document, we iterate through its zones and populate postings_dict and index_dict
     n = len(df.index)
-    for i in range(n):
+    for i in range(2):
         record = df.iloc[i]
         docId = record['document_id']
         print('Starting on document: {}'.format(docId))  # Log docId
@@ -105,7 +106,10 @@ def build_index(in_dir, out_dict, out_postings):
             # postings_dict = {token_zone: {docId: termFrequency}}
             for t in termList:
                 # Terms have to be categorised by their zones
-                t_zone = t + '_{}'.format(zone)
+                if not no_zones:
+                    t_zone = t + '_{}'.format(zone)
+                else:
+                    t_zone = t
                 if t_zone in postings_dict.keys():
                     if docId in postings_dict[t_zone].keys():
                         termFreq = postings_dict[t_zone][docId]
@@ -121,7 +125,10 @@ def build_index(in_dir, out_dict, out_postings):
             # index_dict = {token_zone: docFrequency}
             # docLengths_dict = {docId: docLength}
             for t in termSet:
-                t_zone = t + '_{}'.format(zone)
+                if not no_zones:
+                    t_zone = t + '_{}'.format(zone)
+                else:
+                    t_zone = t
                 if t_zone in index_dict.keys():
                     docFreq = index_dict[t_zone]
                     docFreq += 1
