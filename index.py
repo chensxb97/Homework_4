@@ -40,12 +40,11 @@ def build_index(in_dir, out_dict, out_postings):
 
     # Initialisation
     punc = list(string.punctuation)
-    punc.append("'")  # Include apostrophe
+    punc.append("'")  # Include apostrophe as punctuation
     punc_dict = Counter(punc)  # Punctuation dictionary for faster access O(1)
     stop_words = stopwords.words('english')
-    # Stopword dictionary for faster access O(1)
-    stopwords_dict = Counter(stop_words)
-    stemmer = PorterStemmer()
+    stopwords_dict = Counter(stop_words) # Stopword dictionary for faster access O(1)
+    stemmer = PorterStemmer() # Stemmer
     index_dict = {}
     postings_dict = {}
     relevantDocs_dict = {}
@@ -55,9 +54,8 @@ def build_index(in_dir, out_dict, out_postings):
     # Load dataset
     df_zf = ZipFile(in_dir)  # Reading from zipped file
     df = pd.read_csv(df_zf.open('dataset.csv'))
+
     # consider free text from all zones except doc_id
-    # df = df.drop('date_posted', axis=1)
-    # df = df.drop('court', axis=1)
     zones = (df.drop(columns=['document_id'])).columns
 
     # Sort the dataframe by doc_id in ascending order
@@ -65,13 +63,11 @@ def build_index(in_dir, out_dict, out_postings):
     df = df.sort_values(by=['document_id'])
 
     # Word processing and tokenisation for each document
-
-    # For each document, we iterate through its zones and populate postings_dict and index_dict
+    # For each document, we iterate through its zones and populate the dictionaries
     n = len(df.index)
     for i in range(n):
         record = df.iloc[i]
         docId = record['document_id']
-        print('Starting on document: {}'.format(docId))  # Log docId
         docLength = 0
         for zone in zones:
             # Store all observed terms in a list, used to track termFrequency
@@ -82,29 +78,12 @@ def build_index(in_dir, out_dict, out_postings):
             raw_text = record[zone]
             raw_text = raw_text.lower()
             for sentence in nltk.sent_tokenize(raw_text):
-                for word in nltk.word_tokenize(sentence): # Split the sentence
+                for word in nltk.word_tokenize(sentence):
+                    # Only index alphabetical non-stopword tokens
                     if word.isalpha() and word not in stopwords_dict and word not in punc_dict:
                         stemmed = stemmer.stem(word)
                         termList.append(stemmed)
                         termSet.add(stemmed) 
-
-                # # Remove punctuation
-                # clean_text = ''.join(
-                #     [word for word in sentence if word not in punc_dict])
-                # clean_text_no_sw = ' '.join([word for word in nltk.word_tokenize(
-                #     clean_text) if word not in stopwords_dict])  # Remove stopwords
-                # if only_alpha:
-                #     stemmed = ' '.join([stemmer.stem(word) for word in nltk.word_tokenize(
-                #         clean_text_no_sw) if word.isalpha()])  # Stem words within the sentence
-                # else:
-                #     stemmed = ' '.join(
-                #         [stemmer.stem(word) for word in nltk.word_tokenize(clean_text_no_sw)])
-                # for i in range(1, 4):  # Generate unigrams, bigrams and trigrams
-                #     gramList = []
-                #     gramList = get_ngrams(stemmed, i)
-                #     for gram in gramList:
-                #         termList.append(gram)
-                #         termSet.add(gram)
 
             # Populate postings_dict
             # postings_dict = {token_zone: {docId: termFrequency}}
@@ -142,10 +121,8 @@ def build_index(in_dir, out_dict, out_postings):
 
         # Increment collection size
         collection_size += 1
-        print('Indexed: {}/{}'.format(collection_size, n))  # Log indexing
 
     # Sort index_dict
-    print('Sorting dictionaries...')
     sorted_index_dict_array = sorted(index_dict.items())
     sorted_index_dict = {}
     for termID, (term, value) in enumerate(sorted_index_dict_array):
@@ -153,17 +130,13 @@ def build_index(in_dir, out_dict, out_postings):
         termID += 1
         docFrequency = value
         sorted_index_dict[term] = [termID, docFrequency]
-    # Dictionary is now {term : [termID, docFrequency]}
+    # Index dictionary is now {term : [termID, docFrequency]}
 
     # Sort postings_dict
     sorted_postings_dict_array = sorted(postings_dict.items())
-    print('Dictionaries sorted')
-    print(sorted_index_dict)
 
     # Output postings file
     postings_out = open(out_postings, 'w')
-
-    print('Starting on postings... ')  # Log postings
 
     # Generate and write posting strings to postings file
     # Store charOffset and stringLength in sorted_index_dict
@@ -176,7 +149,7 @@ def build_index(in_dir, out_dict, out_postings):
             termId, docFrequency, char_offset, strLength)
         char_offset += strLength
     postings_out.close()
-    # Final dictionary is now {term : [termID,docFrequency,charOffSet,strLength]}
+    # Final index dictionary is now {term : [termID,docFrequency,charOffSet,strLength]}
 
     print('Postings Done!')
 
@@ -216,15 +189,6 @@ def build_index(in_dir, out_dict, out_postings):
     pickle.dump([sorted_index_dict, docLengths_dict, relevantDocs_dict,
                  collection_size], open(out_dict, "wb"))
     print('Indexing done!')
-
-
-# def get_ngrams(text, n):
-#     '''
-#     Returns a list of n-grams from an input string
-#     '''
-#     n_grams = ngrams(nltk.word_tokenize(text), n)
-#     return ['&'.join(grams) for grams in n_grams]
-
 
 def create_postings(term_dictionary):
     '''
