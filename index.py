@@ -15,14 +15,12 @@ from zipfile import ZipFile
 from os import listdir
 from os.path import join, isfile
 from nltk.stem.porter import PorterStemmer
-from nltk.util import ngrams
 from nltk.corpus import stopwords
 from collections import Counter
 
 # usage
 
-# python index.py -i dataset.zip -d dictionary.txt -p postings.txt
-
+# python3 index.py -i dataset.zip -d dictionary.txt -p postings.txt
 
 def usage():
     print("usage: " +
