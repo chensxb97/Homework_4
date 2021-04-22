@@ -151,8 +151,6 @@ def build_index(in_dir, out_dict, out_postings):
     postings_out.close()
     # Final index dictionary is now {term : [termID,docFrequency,charOffSet,strLength]}
 
-    print('Postings Done!')
-
     # Obtain relevant document vectors for pseudo-relevance feedback
     for docId, docLength in docLengths_dict.items():
         # Temporary dictionary to store all tf-idf weights in relevant documents before sorting
@@ -183,12 +181,10 @@ def build_index(in_dir, out_dict, out_postings):
         # Store relevant document vector
         relevantDocs_dict[docId] = sorted_relevantDoc
 
-    print('Pickling...')
-
     # Save index, length dictionaries and collection size using pickle
     pickle.dump([sorted_index_dict, docLengths_dict, relevantDocs_dict,
                  collection_size], open(out_dict, "wb"))
-    print('Indexing done!')
+    print('done!')
 
 def create_postings(term_dictionary):
     '''
