@@ -20,6 +20,7 @@ from nltk.corpus import stopwords
 from collections import Counter
 
 # usage
+
 # python index.py -i dataset.zip -d dictionary.txt -p postings.txt
 
 
